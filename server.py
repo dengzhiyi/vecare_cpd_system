@@ -6,7 +6,7 @@ Serves the dashboard plus a small JSON API:
   GET  /api/scenarios                 preset cabin scenarios + model parameters
   GET  /api/status                    current engine / detector status
   GET  /api/live?since=N               incremental live frames + events
-  POST /api/live/start                {scenario, sensitivity, speed, seed?}
+  POST /api/live/start                {scenario, sensitivity, speed, seed?, hw_f_max?}
   POST /api/live/pause                {paused}
   POST /api/live/speed                {speed}
   POST /api/live/ack                  acknowledge / mute the alarm
@@ -162,11 +162,13 @@ class Handler(BaseHTTPRequestHandler):
                 if key not in SCENARIOS:
                     self._send_json({"error": f"unknown scenario: {key}"}, 400)
                     return
+                hw = body.get("hw_f_max")
                 status = ENGINE.start(
                     scenario_key=key,
                     sensitivity=float(body.get("sensitivity", 1.0)),
                     speed=float(body.get("speed", 1.0)),
                     seed=body.get("seed"),
+                    hw_f_max=None if hw in (None, "", 0) else float(hw),
                 )
                 self._send_json(status, 201)
                 return

@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 # 旧版算法录制的会话样本（仅本地保留参考，git 历史中仍可取回）
 data/sessions/_legacy-pre-v2/
+# --selfcheck 渲染出来的临时 WAV
+data/selfcheck/

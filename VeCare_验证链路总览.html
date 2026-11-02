@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VeCare 完整验证链路</title>
+<style>
+:root{
+  --ink:#16181d; --ink-2:#3d4350; --muted:#6b7382; --faint:#9aa3b0;
+  --line:#e4e7ec; --line-2:#cfd4dc;
+  --bg:#fcfcfb; --card:#ffffff;
+  --accent:#1f5fd0; --accent-soft:#eef3fd; --accent-line:#c6d8f7;
+  --teal:#0f7b72; --teal-soft:#e8f5f3; --teal-line:#bde0da;
+  --amber:#a8620a; --amber-soft:#fdf3e3; --amber-line:#efd6ae;
+  --red:#b3261e; --red-soft:#fbeceb; --red-line:#f0c9c6;
+  --mono: ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.78 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px 100px}
+a{color:inherit}
+
+/* ---------- hero ---------- */
+.hero{padding:72px 0 40px;border-top:3px solid var(--ink)}
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:18px
+}
+h1{font-size:42px;line-height:1.2;font-weight:500;margin:0 0 18px;letter-spacing:-.015em}
+.lede{font-size:17px;line-height:1.75;color:var(--ink-2);max-width:760px;margin:0 0 28px}
+.lede b{font-weight:500;color:var(--ink);background:linear-gradient(transparent 62%,#dfe9fb 62%)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  font-family:var(--mono);font-size:12.5px;padding:5px 11px;border:1px solid var(--line-2);
+  border-radius:6px;background:#fff;color:var(--ink-2)
+}
+.chip b{color:var(--accent);font-weight:500}
+
+/* ---------- toc ---------- */
+.toc{
+  display:flex;flex-wrap:wrap;gap:6px 22px;padding:16px 0;margin-bottom:8px;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-size:13.5px;color:var(--muted);position:sticky;top:0;z-index:5;
+  background:rgba(252,252,251,.94);backdrop-filter:blur(8px)
+}
+.toc a{text-decoration:none;transition:color .15s}
+.toc a:hover{color:var(--accent)}
+.toc span{font-family:var(--mono);color:var(--faint);margin-right:6px;font-size:11.5px}
+
+/* ---------- section ---------- */
+section{padding-top:56px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:10px}
+.num{
+  font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--accent-soft);
+  border:1px solid var(--accent-line);border-radius:5px;padding:2px 7px;flex:none;
+  position:relative;top:-2px
+}
+h2{font-size:24px;font-weight:500;margin:0;letter-spacing:-.01em}
+.sec-sub{margin:0 0 26px 0;color:var(--muted);font-size:14.5px;max-width:800px}
+h3{font-size:16px;font-weight:500;margin:32px 0 10px}
+p{margin:0 0 16px}
+.mono{font-family:var(--mono);font-size:13px;background:#f2f4f7;padding:1px 5px;border-radius:4px;color:var(--ink-2)}
+
+/* ---------- figure ---------- */
+figure{
+  margin:0 0 12px;background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:26px 24px 20px
+}
+figcaption{
+  font-size:13px;color:var(--muted);margin:0 0 34px;padding-left:2px;line-height:1.7
+}
+figcaption b{color:var(--ink-2);font-weight:500}
+
+/* ---------- tables ---------- */
+.tbl-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:11px 14px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line)}
+tbody tr:last-child td{border-bottom:none}
+thead th{
+  font-size:12px;font-weight:500;letter-spacing:.03em;color:var(--muted);
+  background:#f7f8fa;border-bottom:1px solid var(--line-2);white-space:nowrap
+}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+th.n{text-align:right}
+td.nil{color:var(--faint);text-align:right;font-family:var(--mono)}
+tbody tr:hover{background:#fafbfd}
+.dim{color:var(--muted)}
+.code-i{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+
+/* bar in table */
+.bc{display:flex;align-items:center;justify-content:flex-end;gap:9px}
+.track{width:82px;height:6px;background:#eef0f3;border-radius:3px;overflow:hidden;flex:none}
+.track i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.track i.zero{background:transparent}
+.bv{font-family:var(--mono);font-size:12.5px;width:22px;text-align:right;color:var(--ink-2)}
+
+/* ---------- code ---------- */
+.code{
+  background:#1c1f26;color:#e6e9ef;border-radius:10px;padding:18px 20px;
+  font-family:var(--mono);font-size:13px;line-height:1.9;overflow-x:auto;margin:0 0 16px;
+  white-space:pre-wrap;word-break:break-word
+}
+.code .c{color:#767f90}
+.code .p{color:#7fb3ff;user-select:none}
+.code .s{color:#9ed8a0}
+
+/* ---------- notes ---------- */
+.note{
+  border-left:3px solid var(--accent);background:var(--accent-soft);padding:14px 18px;
+  border-radius:0 8px 8px 0;font-size:14px;line-height:1.72;margin:0 0 16px;color:var(--ink-2)
+}
+.note b{font-weight:500;color:var(--ink)}
+.note.warn{border-color:var(--amber);background:var(--amber-soft)}
+.note.limit{border-color:var(--red);background:var(--red-soft)}
+
+/* ---------- path cards ---------- */
+.paths{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:18px}
+.path{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;position:relative}
+.path .tag{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--accent);
+  background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:5px;padding:2px 7px
+}
+.path h4{font-size:15px;font-weight:500;margin:14px 0 4px}
+.path .q{font-size:13px;color:var(--muted);margin:0 0 12px}
+.path ul{margin:0;padding-left:0;list-style:none;font-size:13px;color:var(--ink-2)}
+.path li{padding:5px 0 5px 16px;position:relative;line-height:1.6}
+.path li::before{content:"";position:absolute;left:0;top:12px;width:5px;height:5px;border-radius:50%;background:var(--line-2)}
+.path .cmd{
+  margin-top:12px;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  border-top:1px dashed var(--line-2);padding-top:10px;word-break:break-all
+}
+
+/* ---------- stat cards ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0 10px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.stat b{display:block;font-family:var(--mono);font-size:23px;font-weight:500;color:var(--accent);line-height:1.3;letter-spacing:-.01em}
+.stat span{display:block;font-size:13px;color:var(--muted);margin-top:6px;line-height:1.6}
+
+/* ---------- parameter layers ---------- */
+.layer{
+  display:grid;grid-template-columns:186px 1fr;gap:26px;padding:24px 0;
+  border-bottom:1px solid var(--line)
+}
+.layer:first-of-type{border-top:1px solid var(--line)}
+.lid{font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.08em}
+.lname{font-size:16px;font-weight:500;margin:4px 0 6px}
+.lfile{font-family:var(--mono);font-size:11.5px;color:var(--faint);word-break:break-all}
+.verdict{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid;margin-bottom:10px}
+.verdict.ok{color:var(--teal);border-color:var(--teal-line);background:var(--teal-soft)}
+.verdict.care{color:var(--amber);border-color:var(--amber-line);background:var(--amber-soft)}
+.verdict.no{color:var(--red);border-color:var(--red-line);background:var(--red-soft)}
+.verdict.neu{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+td .verdict{margin-bottom:0;white-space:nowrap}
+.pchips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.pchip{
+  font-family:var(--mono);font-size:12px;padding:3px 9px;border:1px solid var(--line-2);
+  border-radius:6px;background:#fff;color:var(--ink-2);white-space:nowrap
+}
+.pchip em{font-style:normal;color:var(--accent);font-weight:500}
+.layer p{font-size:13.5px;color:var(--muted);margin:0}
+
+/* ---------- ui list ---------- */
+.roles{display:grid;gap:0;margin-bottom:16px}
+.role{display:grid;grid-template-columns:40px 1fr;gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
+.role:first-child{border-top:1px solid var(--line)}
+.rn{
+  width:26px;height:26px;border-radius:50%;background:var(--accent-soft);border:1px solid var(--accent-line);
+  color:var(--accent);font-family:var(--mono);font-size:12px;display:flex;align-items:center;justify-content:center;
+  margin-top:2px
+}
+.role h4{margin:0 0 4px;font-size:15px;font-weight:500}
+.role p{margin:0;font-size:13.5px;color:var(--muted)}
+
+/* ---------- footer ---------- */
+footer{
+  margin-top:72px;padding-top:24px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--faint);line-height:1.9;font-family:var(--mono)
+}
+
+@media (max-width:860px){
+  .wrap{padding:0 20px 72px}
+  h1{font-size:32px}
+  .paths,.stats{grid-template-columns:1fr}
+  .layer{grid-template-columns:1fr;gap:12px}
+  .toc{position:static}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">VeCare · 系统原型 / 验证文档</div>
+  <h1>完整验证链路</h1>
+  <p class="lede">
+    三条输入，一条流水线，三类出口。仿真的输入<b>不是录音文件</b>，而是一组物理参数；
+    它和实录音频最终都会变成同一个 24×50 Hz 的 CSI 振幅矩阵，之后的每一行代码完全相同。
+  </p>
+  <div class="chips">
+    <span class="chip"><b>39</b> 项测试通过</span>
+    <span class="chip"><b>7</b> 个验证场景</span>
+    <span class="chip">响应 <b>10.0–10.1</b> s</span>
+    <span class="chip">CSI <b>24 × 50 Hz</b></span>
+    <span class="chip">决策 <b>10 Hz</b></span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#flow"><span>01</span>链路总览</a>
+  <a href="#input"><span>02</span>仿真输入</a>
+  <a href="#paths"><span>03</span>三条路径</a>
+  <a href="#front"><span>04</span>音频前端</a>
+  <a href="#run"><span>05</span>如何跑</a>
+  <a href="#audio"><span>06</span>实采接入</a>
+  <a href="#band"><span>07</span>带宽受限</a>
+  <a href="#params"><span>08</span>参数分层</a>
+  <a href="#ui"><span>09</span>WebUI</a>
+  <a href="#limit"><span>10</span>限制</a>
+</nav>
+
+<!-- ============ 01 ============ -->
+<section id="flow">
+  <div class="sec-head"><span class="num">01</span><h2>整条链路</h2></div>
+  <p class="sec-sub">三条输入在「SAS 特征流水线」处合并，合并点之后没有任何分叉——这就是仿真结论能迁移到真实录音的原因。</p>
+
+  <figure>
+    <svg width="100%" viewBox="0 0 1000 744" xmlns="http://www.w3.org/2000/svg" role="img">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <g>
+        <rect x="40" y="16" width="280" height="92" rx="10" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="180" y="52" text-anchor="middle" font-size="17" font-weight="500" fill="#16181d">① 仿真直连</text>
+        <text x="180" y="78" text-anchor="middle" font-size="13" fill="#6b7382">channel.step(dt) → |H|</text>
+      </g>
+      <g>
+        <rect x="360" y="16" width="280" height="92" rx="10" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="500" y="52" text-anchor="middle" font-size="17" font-weight="500" fill="#16181d">② 仿真 → WAV</text>
+        <text x="500" y="78" text-anchor="middle" font-size="13" fill="#6b7382">render_wav 渲染 48 kHz</text>
+      </g>
+      <g>
+        <rect x="680" y="16" width="280" height="92" rx="10" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="820" y="52" text-anchor="middle" font-size="17" font-weight="500" fill="#16181d">③ 实录录音</text>
+        <text x="820" y="78" text-anchor="middle" font-size="13" fill="#6b7382">麦克风 + 循环探测音</text>
+      </g>
+
+      <g>
+        <rect x="360" y="176" width="600" height="92" rx="10" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="660" y="212" text-anchor="middle" font-size="16" font-weight="500" fill="#16181d">load_csi · 帧同步 + 谱除法反演</text>
+        <text x="660" y="238" text-anchor="middle" font-size="13" fill="#6b7382">周期互相关对齐 → H[k] = R[k]·S*[k] / |S[k]|² → |H(f)|</text>
+      </g>
+
+      <g>
+        <rect x="40" y="312" width="920" height="104" rx="10" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="500" y="352" text-anchor="middle" font-size="17" font-weight="500" fill="#16181d">SAS 特征流水线 · SASPipeline</text>
+        <text x="500" y="380" text-anchor="middle" font-size="13" fill="#6b7382">运动通道（1 s 窗 · 残差能量 + 子载波一致性）　|　呼吸通道（8 s 窗 · MRC 加权 ACF）</text>
+      </g>
+
+      <g>
+        <rect x="40" y="468" width="920" height="104" rx="10" fill="#fdf3e3" stroke="#a8620a" stroke-width="0.75"/>
+        <text x="500" y="508" text-anchor="middle" font-size="17" font-weight="500" fill="#16181d">CPDDetector 状态机</text>
+        <text x="500" y="536" text-anchor="middle" font-size="13" fill="#6b7382">校准 δ₀ → 证据占比 30% → 响应预算 10 s → 告警 / 呼吸暂停 15 s 升级</text>
+      </g>
+
+      <g>
+        <rect x="40" y="636" width="280" height="88" rx="10" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
+        <text x="180" y="668" text-anchor="middle" font-size="16" font-weight="500" fill="#16181d">离线指标</text>
+        <text x="180" y="694" text-anchor="middle" font-size="12.5" fill="#6b7382">run_offline / run_wav</text>
+      </g>
+      <g>
+        <rect x="360" y="636" width="280" height="88" rx="10" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
+        <text x="500" y="668" text-anchor="middle" font-size="16" font-weight="500" fill="#16181d">Web UI</text>
+        <text x="500" y="694" text-anchor="middle" font-size="12.5" fill="#6b7382">4 图 + 事件流 + 回放</text>
+      </g>
+      <g>
+        <rect x="680" y="636" width="280" height="88" rx="10" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
+        <text x="820" y="668" text-anchor="middle" font-size="16" font-weight="500" fill="#16181d">会话日志</text>
+        <text x="820" y="694" text-anchor="middle" font-size="12.5" fill="#6b7382">frames / events / meta</text>
+      </g>
+
+      <path d="M180 108 L180 312" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+      <text x="194" y="204" font-size="12.5" fill="#9aa3b0">不经 WAV 环节</text>
+
+      <path d="M500 108 L500 176" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+      <path d="M820 108 L820 176" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+      <path d="M660 268 L660 312" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+
+      <path d="M500 416 L500 468" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+      <text x="514" y="446" font-size="12.5" fill="#9aa3b0">10 Hz 决策帧</text>
+
+      <path d="M500 572 L500 606" fill="none" stroke="#9aa3b0" stroke-width="1.5"/>
+      <path d="M180 606 L820 606" fill="none" stroke="#9aa3b0" stroke-width="1.5"/>
+      <path d="M180 606 L180 636" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+      <path d="M500 606 L500 636" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+      <path d="M820 606 L820 636" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar)"/>
+    </svg>
+  </figure>
+  <figcaption>
+    <b>读法：</b>左侧绕开 WAV 的直线是「仿真直连」，用来单独检验算法；中间与右侧都要经过 <span class="mono">load_csi</span>，用来检验音频前端。
+    三条路径在第 3 行汇合后共用全部下游代码。
+  </figcaption>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="input">
+  <div class="sec-head"><span class="num">02</span><h2>仿真输入是什么</h2></div>
+  <p class="sec-sub">不是音频，是参数。每个场景 = 一个「物理场景参数包」，由合成器算出理想 CSI。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>输入项</th><th>取值</th><th>对应物理量</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="code-i">static_delays</span></td><td class="n">0.58 / 1.7 / 2.8 / 3.9 / 5.1 / 6.4 / 7.9 / 9.2 ms</td><td class="dim">8 条座舱多径的往返延时</td></tr>
+        <tr><td><span class="code-i">static_gains</span></td><td class="n">1.0 → 0.15 递减 + 随机相位</td><td class="dim">各路径反射强度</td></tr>
+        <tr><td><span class="code-i">noise_sigma</span></td><td class="n">0.020 – 0.022</td><td class="dim">底噪，约合 35 dB 信噪比</td></tr>
+        <tr><td><span class="code-i">target.enter_t / distance_m</span></td><td class="n">9.0 s / 1.35 – 1.55 m</td><td class="dim">目标何时出现、离话筒多远</td></tr>
+        <tr><td><span class="code-i">target.bpm / chest_mm</span></td><td class="n">14 – 30 BPM / 3.0 mm</td><td class="dim">呼吸频率与胸壁位移峰值</td></tr>
+        <tr><td><span class="code-i">target.reflectivity</span></td><td class="n">0.030 – 0.045</td><td class="dim">目标反射系数，决定回波强度</td></tr>
+        <tr><td><span class="code-i">motion_events</span></td><td class="n">0.09 – 0.18 m / 1.0 – 1.6 s</td><td class="dim">肢体动作幅度与持续时长</td></tr>
+        <tr><td><span class="code-i">noise / vibration_bursts</span></td><td class="n">×2.6 幅度 / 3.4 s</td><td class="dim">噪声突发、座椅振动</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>合成器每 20 ms 算一次下面的式子，再叠加复高斯噪声，取模后就是那一帧的 24 个数：</p>
+
+  <div class="code">H(f, t) = Σ<sub>r</sub> a<sub>r</sub>(t) · exp(−j2πf·τ<sub>r</sub>(t))　　然后 |H(f, t)| 送入流水线</div>
+
+  <p>一帧 24 个子载波、每秒 50 帧。呼吸让 <span class="mono">τ_target</span> 以毫米级缓慢起伏，肢体动作让它在几十毫秒内跳变——两者在统计量上的差异，就是整条算法要抓的东西。</p>
+
+  <div class="note">
+    <b>关键点：</b>仿真输入里没有「波形」这个概念。波形只存在于路径 ② 和 ③，是前端处理的对象，而不是算法的输入。
+    所以「仿真能不能替代实录」这个问题的答案很明确：不能替代真实环境，但能证明算法本身和前端实现没写错。
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="paths">
+  <div class="sec-head"><span class="num">03</span><h2>三条路径各证明什么</h2></div>
+  <p class="sec-sub">覆盖范围是逐层叠加的：算法 → 音频前端 → 真实环境。每往上一层，能排除的错误类型就多一类。</p>
+
+  <div class="paths">
+    <div class="path">
+      <span class="tag">PATH A</span>
+      <h4>仿真直连</h4>
+      <p class="q">证明：算法逻辑对不对</p>
+      <ul>
+        <li>跳过音频层，直接给 24 个子载波振幅</li>
+        <li>用于调阈值、看误报漏报</li>
+        <li>跑得最快，7 场景约 30 s</li>
+      </ul>
+      <div class="cmd">run_offline(key)</div>
+    </div>
+    <div class="path">
+      <span class="tag">PATH B</span>
+      <h4>仿真 → WAV → 回放</h4>
+      <p class="q">证明：音频前端有没有写错</p>
+      <ul>
+        <li>渲染成真实 48 kHz 波形再解回来</li>
+        <li>A 与 B 的差 = 前端的引入误差</li>
+        <li>B 复现不出 A，说明前端有 bug</li>
+      </ul>
+      <div class="cmd">replay_audio.py --selfcheck</div>
+    </div>
+    <div class="path">
+      <span class="tag">PATH C</span>
+      <h4>实录文件</h4>
+      <p class="q">证明：真实座舱能不能用</p>
+      <ul>
+        <li>混响、扬声器非线性、麦克风频响</li>
+        <li>只有这条能产出对外可引用的数字</li>
+        <li><b>目前尚未跑过</b></li>
+      </ul>
+      <div class="cmd">replay_audio.py capture.wav</div>
+    </div>
+  </div>
+
+  <figure>
+    <svg width="100%" viewBox="0 0 1000 400" xmlns="http://www.w3.org/2000/svg" role="img">
+      <title>三条路径的验证覆盖深度</title>
+      <path d="M100 340 L900 340" stroke="#cfd4dc" stroke-width="1"/>
+
+      <text x="205" y="228" text-anchor="middle" font-size="14" font-weight="500" fill="#16181d">A · 仿真直连</text>
+      <rect x="120" y="244" width="170" height="96" rx="6" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+      <text x="205" y="292" text-anchor="middle" font-size="13" fill="#1f5fd0">算法逻辑</text>
+
+      <text x="500" y="132" text-anchor="middle" font-size="14" font-weight="500" fill="#16181d">B · 仿真 → WAV</text>
+      <rect x="415" y="148" width="170" height="96" rx="6" fill="#e8f5f3" stroke="#0f7b72" stroke-width="0.75"/>
+      <text x="500" y="196" text-anchor="middle" font-size="13" fill="#0f7b72">音频前端</text>
+      <rect x="415" y="244" width="170" height="96" rx="6" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+      <text x="500" y="292" text-anchor="middle" font-size="13" fill="#1f5fd0">算法逻辑</text>
+
+      <text x="795" y="36" text-anchor="middle" font-size="14" font-weight="500" fill="#16181d">C · 实录</text>
+      <rect x="710" y="52" width="170" height="96" rx="6" fill="#fdf3e3" stroke="#a8620a" stroke-width="0.75"/>
+      <text x="795" y="100" text-anchor="middle" font-size="13" fill="#a8620a">真实环境</text>
+      <rect x="710" y="148" width="170" height="96" rx="6" fill="#e8f5f3" stroke="#0f7b72" stroke-width="0.75"/>
+      <text x="795" y="196" text-anchor="middle" font-size="13" fill="#0f7b72">音频前端</text>
+      <rect x="710" y="244" width="170" height="96" rx="6" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+      <text x="795" y="292" text-anchor="middle" font-size="13" fill="#1f5fd0">算法逻辑</text>
+
+      <text x="100" y="372" font-size="12.5" fill="#9aa3b0">路径 A 能排除算法错误　·　路径 B 额外排除前端错误　·　路径 C 额外覆盖真实声学环境</text>
+    </svg>
+  </figure>
+  <figcaption>
+    <b>实测一致性：</b>7 个场景 A / B 判定全部一致，存在时刻差 ≤ 1.3 s，BPM 误差 ≤ 0.6。
+    这说明音频前端本身没有引入判定偏差——但这句话只在「仿真渲染出来的波形」上成立。
+  </figcaption>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="front">
+  <div class="sec-head"><span class="num">04</span><h2>音频前端在做什么</h2></div>
+  <p class="sec-sub">从 WAV 到 24 个子载波振幅，中间五步。这里是整套实现里最容易出错、也最值得看的一段。</p>
+
+  <figure>
+    <svg width="100%" viewBox="0 0 1000 112" xmlns="http://www.w3.org/2000/svg" role="img">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g>
+        <rect x="16" y="16" width="168" height="76" rx="8" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
+        <text x="100" y="46" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">WAV 48 kHz</text>
+        <text x="100" y="69" text-anchor="middle" font-size="12" fill="#6b7382">录音文件</text>
+      </g>
+      <g>
+        <rect x="216" y="16" width="168" height="76" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="300" y="46" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">周期互相关</text>
+        <text x="300" y="69" text-anchor="middle" font-size="12" fill="#6b7382">找 20 ms 栅格</text>
+      </g>
+      <g>
+        <rect x="416" y="16" width="168" height="76" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="500" y="46" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">切 960 采样块</text>
+        <text x="500" y="69" text-anchor="middle" font-size="12" fill="#6b7382">一帧 = 一个周期</text>
+      </g>
+      <g>
+        <rect x="616" y="16" width="168" height="76" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="700" y="46" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">谱除法反演</text>
+        <text x="700" y="69" text-anchor="middle" font-size="12" fill="#6b7382">H = R·S* / |S|²</text>
+      </g>
+      <g>
+        <rect x="816" y="16" width="168" height="76" rx="8" fill="#e8f5f3" stroke="#0f7b72" stroke-width="0.75"/>
+        <text x="900" y="46" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">24 点取样</text>
+        <text x="900" y="69" text-anchor="middle" font-size="12" fill="#6b7382">|H(f)| 矩阵</text>
+      </g>
+      <path d="M184 54 L216 54" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <path d="M384 54 L416 54" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <path d="M584 54 L616 54" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <path d="M784 54 L816 54" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar2)"/>
+    </svg>
+  </figure>
+
+  <h3>三个曾经踩过的坑</h3>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:180px">坑</th><th>错在哪</th><th style="width:280px">正确做法</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>用时域相关估 CSI</b></td>
+          <td class="dim">CIR 被探测音自相关主瓣糊成 83 µs 方波，<span class="code-i">sinc(83µs × 23.5kHz)</span> 早过第一零点，高端载波幅度偏低几十个百分点</td>
+          <td class="dim">频域正则化除法 <span class="code-i">H=R·S*/（|S|²+ε）</span>，周期卷积在 DFT 网格上精确成立</td>
+        </tr>
+        <tr>
+          <td><b>载波不在 DFT 网格上</b></td>
+          <td class="dim">多径条纹间距约 150 Hz，网格 50 Hz，插值等于采样一个在两格间振荡的量，零噪声下也有 10% 误差</td>
+          <td class="dim">取整频点。无噪误差降到 1e-6，40 dB 下 0.5%</td>
+        </tr>
+        <tr>
+          <td><b>扫频范围等于载波带宽</b></td>
+          <td class="dim">升余弦边缘正好压在最外侧载波上，探针功率 −23 dB，等效噪声放大 200 倍</td>
+          <td class="dim">扫频 9.8–23.9 kHz，比载波带各宽 700 Hz，带内平坦度 23 dB → 3 dB</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn">
+    <b>这三个坑都不是「调参能救」的。</b>它们错在原理层，现象是「怎么调阈值都不对」。
+    如果只跑路径 A（仿真直连），这三个 bug 一个都不会暴露——这也是为什么路径 B 必须存在。
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="run">
+  <div class="sec-head"><span class="num">05</span><h2>如何跑仿真测试</h2></div>
+  <p class="sec-sub">从轻到重四步：单元测试 → 离线批跑 → 渲染回放 → 实时界面。</p>
+
+  <div class="code"><span class="c"># 1. 单元测试，约 8 s</span>
+<span class="p">$</span> python -m pytest tests -q
+<span class="s">39 passed in 8.04s</span>
+
+<span class="c"># 2. 七场景离线批跑（路径 A），约 30 s</span>
+<span class="p">$</span> python -c "from core.offline import run_offline; import core.scenarios as sc; [print(k, run_offline(k)['metrics']) for k in sc.SCENARIOS]"
+
+<span class="c"># 3. 仿真 → WAV → 回放自检（路径 B），约 40 s</span>
+<span class="p">$</span> python replay_audio.py --selfcheck
+
+<span class="c"># 4. 实时界面</span>
+<span class="p">$</span> python server.py --port 8090</div>
+
+  <h3>离线批跑输出（路径 A 实测）</h3>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>场景</th><th>说明</th>
+          <th class="n">存在 s</th><th class="n">告警 s</th><th class="n">响应 s</th>
+          <th class="n">BPM MAE</th><th class="n">运动帧</th><th class="n">Neff</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><b>empty</b></td><td class="dim">空车厢 · 仅底噪</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">15.79</td></tr>
+        <tr><td><b>sleeping</b></td><td class="dim">入睡婴儿 · 18 BPM</td><td class="n">15.48</td><td class="n">19.98</td><td class="n">10.0</td><td class="n">0.30</td>
+            <td><div class="bc"><span class="track"><i style="width:2%"></i></span><span class="bv">1</span></div></td><td class="n">21.25</td></tr>
+        <tr><td><b>active</b></td><td class="dim">清醒婴儿 · 24 BPM + 肢体动作</td><td class="n">14.28</td><td class="n">19.78</td><td class="n">10.0</td><td class="n">1.96</td>
+            <td><div class="bc"><span class="track"><i style="width:100%"></i></span><span class="bv">68</span></div></td><td class="n">21.87</td></tr>
+        <tr><td><b>apnea</b></td><td class="dim">呼吸暂停 · 42 s 起停呼吸</td><td class="n">14.98</td><td class="n">19.78</td><td class="n">10.0</td><td class="n">0.31</td>
+            <td><div class="bc"><span class="track"><i style="width:6%"></i></span><span class="bv">4</span></div></td><td class="n">18.39</td></tr>
+        <tr><td><b>newborn</b></td><td class="dim">新生儿 · 30 BPM 弱反射</td><td class="n">15.38</td><td class="n">23.98</td><td class="n">10.1</td><td class="n">0.59</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">19.76</td></tr>
+        <tr><td><b>stress</b></td><td class="dim">噪声振动 · 突发噪声 + 座椅振动</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td>
+            <td><div class="bc"><span class="track"><i style="width:31%"></i></span><span class="bv">21</span></div></td><td class="n">14.96</td></tr>
+        <tr><td><b>adult</b></td><td class="dim">成人 · 14 BPM</td><td class="n">16.28</td><td class="n">24.98</td><td class="n">10.1</td><td class="n">0.21</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">21.48</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>10.0–10.1 s</b><span>响应预算自首条证据起算。若出现 16–18，说明被改回了「确认后再等 10 s」的旧口径</span></div>
+    <div class="stat"><b>0 次误报</b><span>empty 与 stress 的 alarm_at 必须为 None。stress 有 21 帧运动证据是正常的，只是没累积到 30% 门限</span></div>
+    <div class="stat"><b>68 帧</b><span>active 的运动证据。若这里是 0 或 1，说明运动通道退化成了纯呼吸兜底</span></div>
+  </div>
+  <p class="sec-sub" style="margin-top:14px">这是三条硬判据。任何一次改动后先看这三个数，再看别的一一它们最能反映链路是否还健康。</p>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="audio">
+  <div class="sec-head"><span class="num">06</span><h2>实采录音接入</h2></div>
+  <p class="sec-sub">四步：生成探测音 → 现场播放并录制 → 命令行判定 → 存成会话。检测代码一行不改，只把输入从「仿真信道」换成「你的 WAV」。</p>
+
+  <figure>
+    <svg width="100%" viewBox="0 0 1000 150" xmlns="http://www.w3.org/2000/svg" role="img">
+      <defs>
+        <marker id="ar6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#9aa3b0" text-anchor="middle" letter-spacing=".08em">
+        <text x="100" y="20">01</text>
+        <text x="300" y="20">02</text>
+        <text x="500" y="20">03</text>
+        <text x="700" y="20">04</text>
+        <text x="900" y="20">05</text>
+      </g>
+      <g>
+        <rect x="16" y="28" width="168" height="78" rx="8" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
+        <text x="100" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">生成探测音</text>
+        <text x="100" y="83" text-anchor="middle" font-size="12" fill="#6b7382">20 ms 循环扫频</text>
+      </g>
+      <g>
+        <rect x="216" y="28" width="168" height="78" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="300" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">播放 + 录音</text>
+        <text x="300" y="83" text-anchor="middle" font-size="12" fill="#6b7382">同一台设备最稳</text>
+      </g>
+      <g>
+        <rect x="416" y="28" width="168" height="78" rx="8" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
+        <text x="500" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">capture.wav</text>
+        <text x="500" y="83" text-anchor="middle" font-size="12" fill="#6b7382">48 kHz · PCM 整数</text>
+      </g>
+      <g>
+        <rect x="616" y="28" width="168" height="78" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
+        <text x="700" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">帧同步 + 谱除法</text>
+        <text x="700" y="83" text-anchor="middle" font-size="12" fill="#6b7382">24 × 50 Hz 振幅</text>
+      </g>
+      <g>
+        <rect x="816" y="28" width="168" height="78" rx="8" fill="#e8f5f3" stroke="#0f7b72" stroke-width="0.75"/>
+        <text x="900" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">判定 / 会话</text>
+        <text x="900" y="83" text-anchor="middle" font-size="12" fill="#6b7382">JSON · WebUI 回放</text>
+      </g>
+      <path d="M184 67 L216 67" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar6)"/>
+      <path d="M384 67 L416 67" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar6)"/>
+      <path d="M584 67 L616 67" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar6)"/>
+      <path d="M784 67 L816 67" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar6)"/>
+    </svg>
+  </figure>
+  <figcaption>步骤 01 和 02 在<b>现场</b>完成，03–05 在<b>电脑上</b>完成。前三格里任何一格做错，后面都不会给出有意义的结果——所以下面先讲清楚「怎么录」，再讲「怎么跑」。</figcaption>
+
+  <h3>① 生成探测音（只做一次）</h3>
+
+  <div class="code"><span class="c"># 48 kHz / 20 ms 一周期 / 9.8–23.9 kHz 线性扫频</span>
+<span class="p">$</span> python replay_audio.py --emit-probe probe.wav --seconds 300
+
+<span class="c"># 60 s ≈ 5.8 MB，300 s ≈ 29 MB；循环播放即可，不要变速</span></div>
+
+  <div class="note">
+    <b>这是主动探测，不是「录一段座舱里的声音」。</b>没有探测音，麦克风收到的只有语音和路噪，
+    里面不存在任何 CSI 可反演的东西，程序会直接拒绝（<span class="mono">no probe repetition found</span>）。
+    探测音必须<b>循环播放</b>并<b>原速原采样率</b>输出，任何变速都会让 20 ms 栅格对不上。
+  </div>
+
+  <h3>② 现场录制</h3>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:118px">项目</th><th style="width:210px">要求</th><th>为什么</th></tr></thead>
+      <tbody>
+        <tr><td><b>编码</b></td><td class="dim">WAV + PCM 整数（16/24/32-bit）</td><td class="dim">浮点 WAV 与 mp3 / aac / m4a 读不了，先转 16-bit PCM</td></tr>
+        <tr><td><b>采样率</b></td><td class="dim">≥ 48 kHz</td><td class="dim">最高载波 23.5 kHz，Nyquist 需 47 kHz。44.1 kHz 会被明确拒绝</td></tr>
+        <tr><td><b>声道</b></td><td class="dim">单声道优先，双声道自动下混</td><td class="dim">只用 <span class="code-i">|H(f)|</span>，两声道相位差无意义</td></tr>
+        <tr><td><b>时长</b></td><td class="dim">≥ 20 s，建议 40 s 以上</td><td class="dim">前 5 s 校准背景，之后至少要有 15 s 证据</td></tr>
+        <tr><td><b>电平</b></td><td class="dim">峰值 0.1–0.9 满刻度，<b>不要削顶</b></td><td class="dim">幅度统计对整体增益不变，但要避开量化噪底与削波谐波</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="roles">
+    <div class="role">
+      <div class="rn">1</div>
+      <div>
+        <h4>关掉所有音频前处理</h4>
+        <p>降噪、回声消除、AGC、波束成形，全部关闭。AGC 的人为幅度调制比呼吸引起的幅度变化大两个数量级；降噪会把 10 kHz 以上的探测音当噪声删掉。</p>
+      </div>
+    </div>
+    <div class="role">
+      <div class="rn">2</div>
+      <div>
+        <h4>前 5 s 车内无人，或完全静止</h4>
+        <p>校准期估计的是背景残差 <span class="code-i">δ₀</span>。婴儿一开始就在动，会把基线抬高，此后整体灵敏度下降——这类失败表现为「一直不告警」，很难从结果反推原因。</p>
+      </div>
+    </div>
+    <div class="role">
+      <div class="rn">3</div>
+      <div>
+        <h4>麦克风固定，不要手持</h4>
+        <p>手抖在 10–30 cm/s，正好落在论文指出的 J0 零点速度带，是这个方法天然的盲区。把它夹在座椅靠背或支架上。</p>
+      </div>
+    </div>
+    <div class="role">
+      <div class="rn">4</div>
+      <div>
+        <h4>播放与录音同采样率、同速率</h4>
+        <p>同一台设备最稳。跨设备允许缓慢漂移（帧同步按实测周期跟踪），但不能重采样或变速——慢放 8.8% 就会因相关度不足被拒。</p>
+      </div>
+    </div>
+    <div class="role">
+      <div class="rn">5</div>
+      <div>
+        <h4>记下距离、座椅位置、车窗、空调档</h4>
+        <p>这几个变量决定结果能不能复现。同一台车同一个座位，换个空调档位，残差底噪就可能翻倍。</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>③ 跑判定</h3>
+
+  <div class="code"><span class="p">$</span> python replay_audio.py capture.wav
+
+==================================================================
+文件        capture.wav
+采样率      48000 Hz      帧率  50.0 Hz（周期 960 采样）
+时长/帧数   33.96 s / 1699 帧      补齐 0  空洞 0
+载波        24 个 @ 10500–23500 Hz      探头裕量 -2.74 dB
+电平        峰值 0.98  RMS 0.35093      削波样本 0
+------------------------------------------------------------------
+判定        检测到儿童 @ 15.7 s（呼吸证据）
+告警        @ 24.2 s   原因 PRESENCE
+响应时间    10.0 s（自首条证据起算）
+呼吸率      18.5 BPM（18.1–19.4，n=198）
+运动证据    0 帧 / 330      干扰抑制 0 帧      最大能量比 1.68
+MRC 有效子载波 19.19 / 24
+==================================================================</div>
+
+  <p class="sec-sub" style="margin:-4px 0 22px">上面这段是真实输出（场景渲染成 WAV 后回灌，非手写示意）。看三个数就够：<b>帧率是否 50.0</b>（栅格对齐）、<b>补齐/空洞是否为 0</b>（没丢周期）、<b>响应时间是否 10 s 左右</b>（预算生效）。</p>
+
+  <h3>④ 存成会话（可选，但推荐）</h3>
+
+  <div class="code"><span class="p">$</span> python replay_audio.py capture.wav --save data/sessions
+
+<span class="c"># 之后在 WebUI「日志回放」里能看到这条会话：</span>
+<span class="c">#   拖时间轴 / 1–16× 变速 / 逐帧看运动能量比与合并 ACF</span>
+
+<span class="c"># 只想取机器可读结果：</span>
+<span class="p">$</span> python replay_audio.py capture.wav --json</div>
+
+  <h3>能扛什么、不能扛什么（实测）</h3>
+
+  <p>下面每一行都是真跑出来的，不是设计意图。它决定了出问题时该怀疑哪一环。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:270px">变更</th><th style="width:230px">结果</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>峰值 0.9 → 0.0005（−66 dBFS）</td><td><span class="verdict ok">仍正常 · 18.5 BPM</span></td><td class="dim">幅度统计对整体增益不变，电平不是敏感项</td></tr>
+        <tr><td>削波 5101 样本（约 0.3%）</td><td><span class="verdict care">仍检出 · 18.5 BPM</span></td><td class="dim">仿真能扛，但真实场景的谐波会落进带内污染幅度，别赌</td></tr>
+        <tr><td>播放设备低通 16 kHz</td><td><span class="verdict ok">仍检出 · 18.4 BPM</span></td><td class="dim">MRC 自动压低失效载波权重，这是它的正作用</td></tr>
+        <tr><td>播放设备低通 12 kHz</td><td><span class="verdict no">拒绝 · 相关度 7.4</span></td><td class="dim">24 个载波里失效太多，相关度低于阈值 8</td></tr>
+        <tr><td>探测音慢放 8.8%</td><td><span class="verdict no">拒绝 · 相关度 4.9</span></td><td class="dim">周期被拉长，20 ms 栅格对不上；正常录音约 24</td></tr>
+        <tr><td>用 44.1 kHz 录制</td><td><span class="verdict no">拒绝 · 需 47 kHz</span></td><td class="dim">Nyquist 22.05 kHz &lt; 23.5 kHz 载波上限，报错里会写明</td></tr>
+        <tr><td>完全没播探测音</td><td><span class="verdict no">拒绝 · 未找到探测音</span></td><td class="dim">这是主动探测，被动监听拿不到 CSI</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn">
+    <b>报「未找到探测音」时，按这个顺序查，不要调参数：</b>
+    ① 录音文件是不是真的包含探测音（用耳机听一遍，应该是持续的高频「嘶」声）；
+    ② 播放有没有被变速或重采样（系统音效、会议软件、蓝牙链路都可能偷偷做）；
+    ③ 播放设备低通是不是低于 16 kHz（通话耳麦常见）。
+    这三种都属于输入不可用，调阈值没有任何用。
+  </div>
+
+  <div class="note limit">
+    <b>实采这条路目前只验证到「链路正确」，没有验证到「真实座舱可用」。</b>
+    上面所有数字都来自「仿真场景 → 渲染 WAV → 回放」，它能证明音频前端没写错，
+    但真实座舱的混响长度、扬声器非线性、麦克风频响、多人活动都还没进来过。
+    拿到第一批实采数据后，<b>先看帧率与空洞</b>，再看 BPM，最后才谈告警时间。
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="band">
+  <div class="sec-head"><span class="num">07</span><h2>扬声器/麦克风到不了 20 kHz</h2></div>
+  <p class="sec-sub">硬件带宽不够时，失效不是「精度差一点」，而是「一半载波变成噪声源」。</p>
+
+  <p>论文的 10.5–23.5 kHz 假设了宽频换能器。车载球顶高音加 MEMS 麦克风常常只到 <b>18 kHz</b>，通话级器件甚至只到 <b>16 kHz</b>。这不是靠调阈值能糊过去的事，因为载波一旦落在硬件滚降上，该频点的探针功率接近零，谱除法就变成 <span class="mono">噪声 / 噪声</span>——估出来的 <span class="mono">|H|</span> 不再有信号成分，只剩一条宽带随机序列。</p>
+
+  <figure>
+  <svg viewBox="0 0 680 316" width="100%" style="max-width:680px;font-family:inherit" role="img" aria-label="三种硬件带宽下的载波布局">
+    <rect x="0" y="0" width="680" height="316" fill="#ffffff"/>
+    <text x="24" y="22" font-size="13" font-weight="600" fill="#16181d">无限制（论文假设）</text>
+    <text x="24" y="39" font-size="11" fill="#6b7382">24 载波 · 565 Hz 间隔 · 扫频 9.8–23.9 kHz</text>
+    <rect x="66.1" y="46" width="547.7" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
+    <rect x="630.7" y="46" width="25.3" height="26" rx="3" fill="#f4f5f7" stroke="#e4e7ec"/>
+    <line x1="66.1" y1="51" x2="66.1" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="89.9" y1="51" x2="89.9" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="113.8" y1="51" x2="113.8" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="137.6" y1="51" x2="137.6" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="161.4" y1="51" x2="161.4" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="185.2" y1="51" x2="185.2" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="209.0" y1="51" x2="209.0" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="232.8" y1="51" x2="232.8" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="256.6" y1="51" x2="256.6" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="280.5" y1="51" x2="280.5" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="304.3" y1="51" x2="304.3" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="328.1" y1="51" x2="328.1" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="351.9" y1="51" x2="351.9" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="375.7" y1="51" x2="375.7" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="399.5" y1="51" x2="399.5" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="423.4" y1="51" x2="423.4" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="447.2" y1="51" x2="447.2" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="471.0" y1="51" x2="471.0" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="494.8" y1="51" x2="494.8" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="518.6" y1="51" x2="518.6" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="542.4" y1="51" x2="542.4" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="566.2" y1="51" x2="566.2" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="590.1" y1="51" x2="590.1" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="613.9" y1="51" x2="613.9" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+
+    <text x="24" y="126" font-size="13" font-weight="600" fill="#16181d">18 kHz 器件</text>
+    <text x="24" y="143" font-size="11" fill="#6b7382">24 载波 · 261 Hz 间隔 · 扫频 9.8–17.2 kHz</text>
+    <rect x="66.1" y="150" width="252.8" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
+    <rect x="348.4" y="150" width="286.5" height="26" rx="3" fill="#fbeceb" stroke="#f0c9c6"/>
+    <line x1="382.1" y1="144" x2="382.1" y2="182" stroke="#b3261e" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="387.1" y="194" font-size="10" fill="#b3261e">−3 dB @ 18 kHz</text>
+    <line x1="66.1" y1="155" x2="66.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="77.1" y1="155" x2="77.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="88.1" y1="155" x2="88.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="99.1" y1="155" x2="99.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="110.1" y1="155" x2="110.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="121.1" y1="155" x2="121.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="132.1" y1="155" x2="132.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="143.1" y1="155" x2="143.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="154.1" y1="155" x2="154.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="165.1" y1="155" x2="165.1" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="176.0" y1="155" x2="176.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="187.0" y1="155" x2="187.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="198.0" y1="155" x2="198.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="209.0" y1="155" x2="209.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="220.0" y1="155" x2="220.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="231.0" y1="155" x2="231.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="242.0" y1="155" x2="242.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="253.0" y1="155" x2="253.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="264.0" y1="155" x2="264.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="275.0" y1="155" x2="275.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="286.0" y1="155" x2="286.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="297.0" y1="155" x2="297.0" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="307.9" y1="155" x2="307.9" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="318.9" y1="155" x2="318.9" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+
+    <text x="24" y="230" font-size="13" font-weight="600" fill="#16181d">16 kHz 器件</text>
+    <text x="24" y="247" font-size="11" fill="#6b7382">17 载波 · 250 Hz 间隔 · 扫频 9.8–15.2 kHz</text>
+    <rect x="66.1" y="254" width="168.5" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
+    <rect x="264.2" y="254" width="370.8" height="26" rx="3" fill="#fbeceb" stroke="#f0c9c6"/>
+    <line x1="297.9" y1="248" x2="297.9" y2="286" stroke="#b3261e" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="302.9" y="298" font-size="10" fill="#b3261e">−3 dB @ 16 kHz</text>
+    <line x1="66.1" y1="259" x2="66.1" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="76.7" y1="259" x2="76.7" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="87.2" y1="259" x2="87.2" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="97.7" y1="259" x2="97.7" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="108.3" y1="259" x2="108.3" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="118.8" y1="259" x2="118.8" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="129.3" y1="259" x2="129.3" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="139.9" y1="259" x2="139.9" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="150.4" y1="259" x2="150.4" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="160.9" y1="259" x2="160.9" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="171.5" y1="259" x2="171.5" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="182.0" y1="259" x2="182.0" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="192.5" y1="259" x2="192.5" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="203.1" y1="259" x2="203.1" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="213.6" y1="259" x2="213.6" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="224.1" y1="259" x2="224.1" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="234.7" y1="259" x2="234.7" y2="275" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
+
+    <text x="24" y="312" font-size="10" fill="#9aa3b0">青绿＝有效载波带　红色＝硬件滚降区（探针在此无能量，谱除法退化为噪声）</text>
+  </svg>
+  <figcaption>载波带顶、载波数、扫频带顶三者一起随硬件上限收缩，<b>下限 10.5 kHz 不动</b>。18 kHz 仍能保住 24 路（6 kHz 带宽），16 kHz 只能降到 17 路——宁减载波数也不压间隔。</figcaption>
+  </figure>
+
+  <h3 style="font-size:15px;margin:26px 0 10px">实测：硬撑 23.5 kHz 的后果</h3>
+  <p>把现有 24 载波配置直接喂给 18 kHz 硬件（渲染 WAV 经 6 阶低通），空车厢的结果是：</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:250px">载波位置</th><th style="width:150px">相对抖动 std/mean</th><th>后果</th></tr></thead>
+      <tbody>
+        <tr><td>10.5–16.5 kHz（有效带内）</td><td class="mono">0.013</td><td class="dim">正常噪声底</td></tr>
+        <tr><td>21–22 kHz（滚降区）</td><td class="mono">0.20 → 0.48</td><td class="dim">15 倍于正常值，残差能量读到「运动」</td></tr>
+        <tr><td colspan="2"><b>空车厢最终判定</b></td><td><span class="verdict no">17.58 s 确认存在并告警</span> BPM 报 12.7</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note limit">
+    <b>这不是精度下降，是安全性崩塌。</b>载波落在滚降上时，<span class="mono">|H|</span> 里根本没有信号成分，而残差能量与 MRC 权重没有任何办法把「噪声/噪声」和「有人动」分开。
+    所以必须让这些载波<b>不存在</b>，而不是指望阈值把它们压下去。
+  </div>
+
+  <h3 style="font-size:15px;margin:26px 0 10px">两条防线</h3>
+
+  <div class="paths">
+    <div class="path">
+      <div class="tag">防线 1 · 设计期</div>
+      <h4>从硬件上限反推频带</h4>
+      <p class="q">plan_band(hw_f_max)</p>
+      <ul>
+        <li>载波带顶 = min(23.5 kHz, 上限 − <b>1.5 kHz</b>)，离滚降留余量</li>
+        <li>下限固定 <b>10.5 kHz</b>：三个档位的高通都是 10 kHz，这 500 Hz 就是它的余量，只有顶部随硬件移动</li>
+        <li>载波数 = 带宽 / <b>250 Hz</b> 封顶，保证相邻载波仍能去相关</li>
+        <li>扫频带随之收窄，不向发不出的频率送能量</li>
+        <li>低于 14 kHz 直接报错，不给出一个注定失效的配置</li>
+      </ul>
+    </div>
+    <div class="path">
+      <div class="tag">防线 2 · 运行时</div>
+      <h4>载波健康门控</h4>
+      <p class="q">SASPipeline 校准期</p>
+      <ul>
+        <li>前 5 s 统计每个载波的相对抖动，剔除高一个数量级的那批</li>
+        <li>基准取<b>25 分位而非中位数</b>：一半频带死掉时中位数自己也会移进死载波</li>
+        <li>存活不足一半则全部保留并报硬件异常，不悄悄在 3 路上继续跑</li>
+        <li>界面仍显示死载波的原始幅度——那是硬件问题，不该被算法掩盖</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 style="font-size:15px;margin:26px 0 10px">三种带宽的实测结果</h3>
+  <p>单元格为「告警时刻 / 响应时间」，数据来自离线评估（`run_offline(key, hw_f_max=…)`）。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px">场景</th><th>24 载波（无限制）</th><th>24 载波 @18 kHz</th><th>17 载波 @16 kHz</th></tr></thead>
+      <tbody>
+        <tr><td>空车厢</td><td><span class="verdict ok">不告警</span> 0 帧</td><td><span class="verdict ok">不告警</span> 0 帧</td><td><span class="verdict ok">不告警</span> 0 帧</td></tr>
+        <tr><td>噪声振动</td><td><span class="verdict ok">不告警</span> 21 帧</td><td><span class="verdict ok">不告警</span> 23 帧</td><td><span class="verdict ok">不告警</span> 23 帧</td></tr>
+        <tr><td>入睡婴儿</td><td class="mono">23.98 / 10.1</td><td class="mono">23.98 / 10.1</td><td class="mono">23.98 / 10.1</td></tr>
+        <tr><td>活跃儿童</td><td class="mono">19.78 / 10.0</td><td class="mono">19.78 / 10.0</td><td class="mono">19.78 / 10.0</td></tr>
+        <tr><td>呼吸暂停</td><td class="mono">20.28 / 10.0</td><td class="mono">19.78 / 10.0</td><td class="mono">19.98 / 10.1</td></tr>
+        <tr><td>新生儿</td><td class="mono">23.98 / 10.1</td><td class="mono">23.98 / 10.1</td><td class="mono">23.98 / 10.1</td></tr>
+        <tr><td>成人</td><td class="mono">24.98 / 10.1</td><td class="mono">20.18 / 10.1</td><td class="mono">20.18 / 10.0</td></tr>
+        <tr><td><b>BPM MAE</b>（活跃 / 新生儿）</td><td class="mono">1.96 / 0.58</td><td class="mono">2.55 / 0.51</td><td class="mono">2.68 / 0.82</td></tr>
+        <tr><td><b>MRC 有效子载波</b></td><td class="mono">21.9</td><td class="mono">21.4</td><td class="mono">15.1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0–10.1 s、空场景零误报、活跃儿童运动证据 67–72 帧。代价是 BPM 精度下降 30–40%，以及 MRC 有效子载波从 21.9 降到 15.1——这是物理上限，不是实现缺陷。</p>
+
+  <h3 style="font-size:15px;margin:26px 0 10px">连带必须改的一处：κ 阈值要随载波数缩放</h3>
+  <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。改成 <span class="mono">median + 5.5 × 稳健σ</span> 后：24 路仍是 0.115（行为不变），17 路升到 0.142，噪声峰值 0.124 被挡、真实运动最弱帧 0.185 仍通过。</p>
+
+  <div class="code"><span class="c"># 已录的音频，按 16 kHz 硬件重新规划频带</span>
+python replay_audio.py capture.wav <span class="p">--hw-f-max</span> <span class="s">16000</span>
+
+<span class="c"># 探测音必须同步换，否则扫频仍在往发不出的频段送能量</span>
+python replay_audio.py --emit-probe probe16k.wav --seconds <span class="s">300</span> <span class="p">--hw-f-max</span> <span class="s">16000</span>
+
+<span class="c"># 在该带宽下跑全场景闭合自检</span>
+python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class="s">16000</span></div>
+
+  <div class="note warn">
+    <b>先测硬件上限再配置，不要依赖兜底。</b>不传 <span class="mono">hw_f_max</span> 时运行时门控仍能消除误报，
+    但载波是按 23.5 kHz 铺的，前端有效积分带宽被浪费，BPM 精度和运动灵敏度都吃亏。
+    测法：扫频播放 10–24 kHz 的啁啾，用被测麦克风录回来做频谱，看 −3 dB 点在哪。
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="params">
+  <div class="sec-head"><span class="num">08</span><h2>参数分五层</h2></div>
+  <p class="sec-sub">不是所有参数都该调。顺序错了，后面全是在拟合噪声。</p>
+
+  <div class="layer">
+    <div>
+      <div class="lid">LAYER 01</div>
+      <div class="lname">场景参数</div>
+      <div class="lfile">core/scenarios.py</div>
+    </div>
+    <div>
+      <span class="verdict neu">先定真值</span>
+      <div class="pchips">
+        <span class="pchip">distance_m <em>1.35–1.55</em></span>
+        <span class="pchip">reflectivity <em>0.030–0.045</em></span>
+        <span class="pchip">noise_sigma <em>0.020</em></span>
+        <span class="pchip">bpm <em>14–30</em></span>
+      </div>
+      <p>决定「测什么」。这三个最敏感：距离、反射强度、噪声。调参前先把真值钉死，否则后面所有指标都没有意义。</p>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div>
+      <div class="lid">LAYER 02</div>
+      <div class="lname">声学前端</div>
+      <div class="lfile">core/config.py · core/audio.py</div>
+    </div>
+    <div>
+      <span class="verdict care">错一个后面全废</span>
+      <div class="pchips">
+        <span class="pchip">CSI_FS <em>50 Hz</em></span>
+        <span class="pchip">载波 <em>10.5–23.5 kHz</em></span>
+        <span class="pchip">扫频 <em>9.8–23.9 kHz</em></span>
+        <span class="pchip">taper <em>0.6 ms</em></span>
+        <span class="pchip">AUDIO_FS <em>48 kHz</em></span>
+      </div>
+      <p>这些是设计约束，不是可调项：载波必须落在 DFT 网格上、扫频必须比载波带宽、采样率必须过 Nyquist。改错的表现是「怎么调阈值都不对」。</p>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div>
+      <div class="lid">LAYER 03</div>
+      <div class="lname">算法</div>
+      <div class="lfile">core/config.py</div>
+    </div>
+    <div>
+      <span class="verdict neu">需要反复试</span>
+      <div class="pchips">
+        <span class="pchip">MOTION_ENERGY_RATIO <em>1.60</em></span>
+        <span class="pchip">MOTION_COHERENCE_MIN <em>0.115</em></span>
+        <span class="pchip">MOTION_WINDOW_S <em>1.0</em></span>
+        <span class="pchip">MOTION_LAG_S <em>0.02</em></span>
+        <span class="pchip">BREATH_MIN_PROMINENCE <em>0.05</em></span>
+        <span class="pchip">BREATH_CONF_THRESHOLD <em>0.50</em></span>
+        <span class="pchip">MRC_WEIGHT_FLOOR <em>0.02</em></span>
+        <span class="pchip">INTERFERENCE_DEPTH <em>0.35</em></span>
+      </div>
+      <p>真正要调的都在这一层。<span class="code-i">MOTION_LAG_S</span> 是论文固定值，动它会撞进 5–25 cm/s 的 J0 零点盲区；<span class="code-i">MOTION_ENERGY_RATIO</span> 是运动灵敏度的主开关。</p>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div>
+      <div class="lid">LAYER 04</div>
+      <div class="lname">判定</div>
+      <div class="lfile">core/config.py · core/detector.py</div>
+    </div>
+    <div>
+      <span class="verdict care">对应产品需求，别为过测试改</span>
+      <div class="pchips">
+        <span class="pchip">EVIDENCE_WINDOW_S <em>5.0</em></span>
+        <span class="pchip">PRESENCE_RATIO <em>0.30</em></span>
+        <span class="pchip">RESPONSE_BUDGET_S <em>10.0</em></span>
+        <span class="pchip">APNEA_TIMEOUT_S <em>15.0</em></span>
+        <span class="pchip">CLEAR_TIMEOUT_S <em>25.0</em></span>
+        <span class="pchip">CALIBRATION_S <em>5.0</em></span>
+      </div>
+      <p>这层直接映射法规与产品需求（10 s 内检出）。为让测试通过而放宽它，等于把需求改掉——该改的是上游算法。</p>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div>
+      <div class="lid">LAYER 05</div>
+      <div class="lname">在线自校准量</div>
+      <div class="lfile">core/detector.py</div>
+    </div>
+    <div>
+      <span class="verdict no">不要手调</span>
+      <div class="pchips">
+        <span class="pchip">δ₀ = median + 0.5·MAD</span>
+        <span class="pchip">κ_thr = min(0.22, max(0.115, median + 0.015))</span>
+        <span class="pchip">呼吸峰稳定性 &lt; 10%</span>
+      </div>
+      <p>这三个是运行时从数据里估出来的，硬改等于绕过自适应逻辑。要调灵敏度请用 <span class="code-i">sensitivity</span>（0.3–2.5，唯一对外暴露的旋钮），它只按比例缩放能量比阈值。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="ui">
+  <div class="sec-head"><span class="num">09</span><h2>WebUI 的作用</h2></div>
+  <p class="sec-sub">它不在检测链路里——关掉它，检测照常运行。它的价值在「看清楚为什么判错」。</p>
+
+  <div class="roles">
+    <div class="role">
+      <div class="rn">1</div>
+      <div>
+        <h4>可视化内部量</h4>
+        <p>调参时唯一能看到判错原因的地方：δ/δ₀ 曲线有没有越过 1.6、κ 是否低于门限、合并 ACF 上的呼吸峰长什么样、证据占比累积到多少、预算倒计时还剩几秒。这些量在日志里只是数字，画出来才能一眼分辨「是阈值太高还是峰值被干扰吃了」。</p>
+      </div>
+    </div>
+    <div class="role">
+      <div class="rn">2</div>
+      <div>
+        <h4>演示</h4>
+        <p>16× 倍速下活跃婴儿约 4.5 s 出告警，座舱声学动画 + 四张图 + 事件流同时推进。适合向非技术方解释这套东西在做什么。</p>
+      </div>
+    </div>
+    <div class="role">
+      <div class="rn">3</div>
+      <div>
+        <h4>日志回放</h4>
+        <p>JSONL 会话可拖时间轴、1–16× 变速。呼吸暂停那条直接拖到 61 s 看 APNEA 升级，不用等仿真跑完。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>注意两点：</b>第一，界面跑的是<b>路径 A（仿真直连）</b>，不读 WAV。实录音频要先
+    <span class="mono">--save data/sessions</span> 存成会话，才会出现在「日志回放」列表里。
+    第二，左侧「仿真真值对照」面板只用于验证，检测链路完全不读它。
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="limit">
+  <div class="sec-head"><span class="num">10</span><h2>已知限制</h2></div>
+
+  <div class="note limit">
+    <b>这套前端从未接过真实硬件。</b>全部验证都是「仿真 → 渲染 WAV → 回放」的闭环。
+    它能证明前端实现没写错，但证明不了真实座舱的混响长度、扬声器非线性、麦克风频响、多人活动这些因素。
+    要拿到能对外引用的数字，必须先实采一批。
+  </div>
+
+  <p>另外两点需要如实记录：</p>
+  <p>
+    <b>MRC 的分集增益仍未验证。</b><span class="mono">mrc_neff</span> 从 23.48 降到 14.96–21.87，
+    但仿真器的目标反射是频率平坦的（各子载波目标强度相同），权重分化只来自噪声实现。要验证论文的 MRC 贡献，必须引入频率选择性目标 RCS 与多径衰落。
+  </p>
+  <p>
+    <b>BPM 精度只能内部看。</b>0.21–1.96 的 MAE 跑在正弦呼吸的仿真信道上，没有真实婴儿的呼吸不规则性、体动伪影和多人干扰。
+  </p>
+  <p>
+    <b>带宽受限的数字同样只有仿真支撑。</b>第 07 节的 18/16 kHz 结论来自「仿真信道 + 理想 6 阶低通」，
+    真实器件的滚降形状、通带纹波、单元谐振峰都没有建模——真实 16 kHz 器件的可用带宽很可能比这里的 14.5 kHz 还窄。
+  </p>
+</section>
+
+<footer>
+  数据来源：run_offline() 七场景（含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 56 项<br>
+  代码位置：D:\WorkBuddy\VeCare扬声器活体检测\vecare_cpd_system　·　文档生成于 2026-11-02
+</footer>
+
+</div>
+</body>
+</html>

@@ -14,15 +14,26 @@ from __future__ import annotations
 
 import numpy as np
 
-from .config import CSI_FS, F_HIGH, F_LOW, N_SUBCARRIERS, SOUND_SPEED
+from .config import CSI_FS, F_HIGH, F_LOW, N_SUBCARRIERS, SOUND_SPEED, AcousticBand, plan_band
 from .scenarios import Scenario, TargetSpec
 
 
 class AcousticChannel:
-    def __init__(self, scenario: Scenario, seed: int = 20231102):
+    def __init__(
+        self,
+        scenario: Scenario,
+        seed: int = 20231102,
+        band: AcousticBand | None = None,
+    ):
         self.scenario = scenario
         self.rng = np.random.default_rng(seed)
-        self.carriers = np.linspace(F_LOW, F_HIGH, N_SUBCARRIERS)
+        # Carrier set follows the hardware ceiling, exactly as the audio front
+        # end does -- otherwise the simulated ground truth would be measured on
+        # a band the real driver cannot excite.
+        self.band = band or plan_band(None)
+        self.carriers = np.linspace(
+            self.band.f_lo, self.band.f_hi, self.band.n_carriers
+        )
         self.t = 0.0
         self._phase = self.rng.uniform(0, 2 * np.pi)
         self._last_breath_t = 0.0
@@ -85,9 +96,12 @@ class AcousticChannel:
                 sigma += self.scenario.noise_sigma * (b["multiplier"] - 1) * shape
         return sigma
 
-    def step(self, dt: float) -> tuple[np.ndarray, np.ndarray, dict]:
-        """Advance the scene by dt seconds and return (CSI, amplitude, truth)."""
-        t = self.t
+    def _paths(self, t: float, dt: float, advance: bool = True) -> dict:
+        """Resolve the delay/gain profile of one 20 ms frame.
+
+        Shared by ``step`` (which advances the breathing phase) and
+        ``impulse_response`` (which must not disturb the timeline).
+        """
         tg = self._target
         present = self._target_visible(t)
 
@@ -95,11 +109,12 @@ class AcousticChannel:
         breathing = False
         if present and tg is not None:
             if self._breathing_active(t):
-                drifting_bpm = tg.bpm * (1 + 0.02 * np.sin(2 * np.pi * 0.013 * t))
-                self._phase += 2 * np.pi * drifting_bpm / 60.0 * dt
+                if advance:
+                    drifting_bpm = tg.bpm * (1 + 0.02 * np.sin(2 * np.pi * 0.013 * t))
+                    self._phase += 2 * np.pi * drifting_bpm / 60.0 * dt
+                    self._last_breath_t = t
                 # chest displacement (peak), decays smoothly if breathing stops
                 breath_amp_m = tg.chest_mm / 1000.0 * np.sin(self._phase)
-                self._last_breath_t = t
                 breathing = True
 
         motion = self._motion_offset(t)
@@ -135,6 +150,63 @@ class AcousticChannel:
                 2 * np.pi * 120.0 * t + self._vib_phase
             )
 
+        return {
+            "present": present,
+            "breathing": breathing,
+            "breath_amp_m": breath_amp_m,
+            "motion": motion,
+            "a_target": a_target,
+            "tau_target": tau_target,
+            "delays": delays,
+            "vib_amp": vib_amp,
+        }
+
+    def sounding_step(self, dt: float) -> tuple[np.ndarray, np.ndarray, dict]:
+        """Advance the scene and return the frame's (delays, gains, truth).
+
+        Unlike ``step`` this does not evaluate the 24-carrier CSI nor draw noise:
+        the audio renderer needs the continuous-frequency CIR, so that the probe
+        can be convolved with it at every audio bin.
+        """
+        t = self.t
+        p = self._paths(t, dt=dt, advance=True)
+        delays = list(p["delays"])
+        gains = list(self.static_gains)
+        if p["present"] and p["a_target"] > 0:
+            delays.append(p["tau_target"])
+            gains.append(complex(p["a_target"]))
+
+        tg = self._target
+        truth = {
+            "present": bool(p["present"]),
+            "breathing": bool(p["breathing"]),
+            "bpm": float(tg.bpm) if tg else None,
+            "distance_m": float(tg.distance_m + p["motion"] + p["breath_amp_m"])
+            if tg
+            else None,
+            "motion_offset_m": float(p["motion"]),
+            "target_amplitude": float(p["a_target"]),
+            "vibration": float(p["vib_amp"]),
+            "noise_sigma": float(self.scenario.noise_sigma),
+            "noise_gain": float(self._noise_sigma(t) / max(1e-9, self.scenario.noise_sigma)),
+        }
+        self.t += dt
+        return np.asarray(delays, dtype=float), np.asarray(gains, dtype=complex), truth
+
+    def step(self, dt: float) -> tuple[np.ndarray, np.ndarray, dict]:
+        """Advance the scene by dt seconds and return (CSI, amplitude, truth)."""
+        t = self.t
+        tg = self._target
+        p = self._paths(t, dt=dt, advance=True)
+        present = p["present"]
+        breathing = p["breathing"]
+        breath_amp_m = p["breath_amp_m"]
+        motion = p["motion"]
+        a_target = p["a_target"]
+        tau_target = p["tau_target"]
+        delays = p["delays"]
+        vib_amp = p["vib_amp"]
+
         # Common phase offset models speaker/mic asynchronization; it cancels
         # when only CSI amplitude is used.
         common_phase = self.rng.uniform(-np.pi, np.pi)
@@ -149,9 +221,10 @@ class AcousticChannel:
             ) * np.exp(1j * common_phase)
 
         sigma = self._noise_sigma(t)
+        n_carriers = self.carriers.size
         noise = sigma / np.sqrt(2) * (
-            self.rng.standard_normal(N_SUBCARRIERS)
-            + 1j * self.rng.standard_normal(N_SUBCARRIERS)
+            self.rng.standard_normal(n_carriers)
+            + 1j * self.rng.standard_normal(n_carriers)
         )
         h = h + noise
 

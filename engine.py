@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from core.channel import AcousticChannel
-from core.config import CSI_FS, DetectorConfig
+from core.config import CSI_FS, DetectorConfig, plan_band
 from core.offline import evaluate_frames
 from core.pipeline import SASPipeline
 from core.scenarios import get_scenario
@@ -62,9 +62,11 @@ class SimulationEngine:
         sensitivity: float = 1.0,
         speed: float = 1.0,
         seed: int | None = None,
+        hw_f_max: float | None = None,
     ) -> dict:
         self.stop(wait=True)
         scenario = get_scenario(scenario_key)
+        band = plan_band(hw_f_max)
         speed = max(0.25, min(16.0, float(speed)))
         sensitivity = max(0.3, min(2.5, float(sensitivity)))
 
@@ -87,7 +89,7 @@ class SimulationEngine:
             session_id = self._new_session_id(scenario.key)
             if seed is None:
                 seed = zlib.crc32(f"{session_id}-{scenario.key}".encode("utf-8")) % (2 ** 31)
-            self.channel = AcousticChannel(scenario, seed=int(seed))
+            self.channel = AcousticChannel(scenario, seed=int(seed), band=band)
             self.session_id = session_id
             self.session_dir = self.sessions_dir / session_id
             self.session_dir.mkdir(parents=True, exist_ok=True)
@@ -104,6 +106,7 @@ class SimulationEngine:
                 "scenario_name": scenario.name,
                 "duration_s": scenario.duration_s,
                 "sensitivity": cfg.sensitivity,
+                "band": band.describe(),
                 "detector_config": cfg.to_dict(),
                 "speed": speed,
                 "seed": int(seed),

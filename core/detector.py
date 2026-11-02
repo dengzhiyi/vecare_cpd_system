@@ -45,6 +45,7 @@ class CPDDetector:
         self.baseline_energy: float | None = None
         self.motion_threshold = cfg.motion_ratio_floor()
         self.coherence_threshold = cfg.motion_coherence_min
+        self.coherence_spread = 0.0
 
         self.motion_ratio = 1.0
         self.motion_coherence = 0.0
@@ -72,6 +73,7 @@ class CPDDetector:
         self.bpm = None
         self.bpm_stale_s = None
         self.breath_confidence = 0.0
+        self._lag_history: deque = deque(maxlen=7)
         self.events: list[dict] = []
 
     # ------------------------------------------------------------------
@@ -101,13 +103,46 @@ class CPDDetector:
             # Background level plus a small guard band so a calm cabin sits
             # comfortably below ratio = 1.
             self.baseline_energy = max(med + 0.5 * mad, 1e-6)
-            coh = float(np.median(np.asarray(self.calib_coherence, dtype=float)))
+            # The coherence gate has to scale with the carrier count, not sit on
+            # a fixed offset from the quiet-window median. A rank-1 energy share
+            # estimated from N carriers has a null expectation near 1/N and a
+            # spread that grows as N shrinks, so a fixed +0.015 keeps almost no
+            # margin once the band narrows: measured at 17 carriers the
+            # quiet-window median was 0.113 (versus 0.087 at 24), putting a
+            # +0.015 threshold at 0.128 against a sustained-noise peak of 0.129
+            # -- a door slam confirmed as a child. Median + 5.5 robust sigma
+            # tracks the spread instead: it still lands on 0.115 at 24 carriers
+            # (absolute floor unchanged) and rises to 0.142 at 17, which clears
+            # the noise peak (0.124) while the weakest real-motion frames
+            # (0.185) stay well above it.
+            coh_vals = np.asarray(self.calib_coherence, dtype=float)
+            coh = float(np.median(coh_vals))
+            coh_mad = float(np.median(np.abs(coh_vals - coh))) * 1.4826
             self.coherence_threshold = min(
-                0.22, max(self.cfg.motion_coherence_min, coh + 0.015)
+                0.22, max(self.cfg.motion_coherence_min, coh + 5.5 * coh_mad)
             )
+            self.coherence_spread = coh_mad
             self.motion_threshold = self.cfg.motion_ratio_floor()
             self.calibrated = True
             self._set_state(t, "MONITORING", "背景校准完成")
+
+    def _breath_lag_is_stable(self, breath: dict) -> bool:
+        """Does this breathing peak agree with the recent ones?
+
+        Used only when the motion channel is flagged, to tell "the body really is
+        moving, but it is also still breathing" (a stable periodic peak) apart
+        from "the ACF is being bent by motion" (a wandering peak).
+        """
+        lag = breath.get("lag_s")
+        if not lag or not breath.get("valid"):
+            return False
+        if float(breath.get("confidence", 0.0)) < self.cfg.breath_conf_threshold:
+            return False
+        history = list(self._lag_history)
+        if len(history) < 3:
+            return False
+        median_lag = float(np.median(history))
+        return abs(float(lag) - median_lag) <= 0.10 * median_lag
 
     # ------------------------------------------------------------------
     def update(self, t: float, motion: dict, breath: dict) -> dict:
@@ -129,8 +164,17 @@ class CPDDetector:
             and coherence >= self.coherence_threshold
         )
 
-        # Only look for breathing when the body is still (paper §4.3).
-        allow_breath = not motion_det
+        # Only look for breathing when the body is still (paper §4.3) -- with one
+        # exception. "Still" is inferred from the motion channel, and the motion
+        # channel measures coherent dynamics *relative to the noise floor*. In a
+        # quiet cabin the chest's own residual (a 1 s linear detrend does not
+        # remove the curvature of an 18 BPM excursion) is by itself several times
+        # the floor, so the motion flag latches on and the breathing channel is
+        # muted forever -- the quieter the recording, the less breathing you get.
+        # A limb bump, unlike breathing, does not leave a stable periodic ACF
+        # peak, so while motion is flagged the breathing peak is accepted only
+        # if its lag agrees with the last few estimates.
+        allow_breath = not motion_det or self._breath_lag_is_stable(breath)
         peak_valid = bool(
             allow_breath
             and breath.get("valid")
@@ -138,6 +182,15 @@ class CPDDetector:
         )
         bpm = breath.get("bpm") if peak_valid else None
         conf = float(breath.get("confidence", 0.0)) if peak_valid else 0.0
+
+        # Track plausible lags even while motion mutes the output: the history is
+        # what makes the stability test above possible at all.
+        if (
+            breath.get("valid")
+            and breath.get("confidence", 0) >= self.cfg.breath_conf_threshold
+            and breath.get("lag_s")
+        ):
+            self._lag_history.append(float(breath["lag_s"]))
 
         if bpm is not None:
             self.bpm_history.append((t, float(bpm)))

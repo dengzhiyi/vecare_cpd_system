@@ -10,7 +10,7 @@ import zlib
 import numpy as np
 
 from .channel import AcousticChannel
-from .config import CSI_FS, MRC_WEIGHT_FLOOR, DetectorConfig
+from .config import CSI_FS, MRC_WEIGHT_FLOOR, DetectorConfig, plan_band
 from .pipeline import SASPipeline
 from .scenarios import get_scenario
 
@@ -24,10 +24,16 @@ def run_offline(
     sensitivity: float = 1.0,
     duration_s: float | None = None,
     seed: int | None = None,
+    hw_f_max: float | None = None,
 ) -> dict:
     scenario = get_scenario(key)
     cfg = DetectorConfig(sensitivity=sensitivity)
-    channel = AcousticChannel(scenario, seed=seed if seed is not None else _default_seed(key))
+    band = plan_band(hw_f_max)
+    channel = AcousticChannel(
+        scenario,
+        seed=seed if seed is not None else _default_seed(key),
+        band=band,
+    )
     pipe = SASPipeline(cfg)
     frames: list[dict] = []
     total = int(round((duration_s or scenario.duration_s) * CSI_FS))
@@ -39,11 +45,17 @@ def run_offline(
         if frame is not None:
             frames.append(frame)
 
+    metrics = evaluate_frames(frames, scenario)
+    metrics["band"] = band.describe()
+    metrics["carriers_planned"] = int(band.n_carriers)
+    metrics["carriers_used"] = int(
+        band.n_carriers if pipe.carrier_mask is None else pipe.carrier_mask.sum()
+    )
     return {
         "scenario": scenario.public(),
         "frames": frames,
         "events": pipe.detector.events,
-        "metrics": evaluate_frames(frames, scenario),
+        "metrics": metrics,
         "detector_config": cfg.to_dict(),
     }
 
