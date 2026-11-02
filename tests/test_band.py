@@ -212,3 +212,23 @@ def test_exported_probe_matches_the_declared_ceiling(tmp_path):
     info = export_probe(tmp_path / "p.wav", seconds=0.2, hw_f_max=16_000)
     assert info["sweep_hz"][1] < 16_000
     assert info["carriers"] == plan_band(16_000).n_carriers
+
+
+def test_ui_offers_exactly_the_bands_the_planner_accepts():
+    """The chips must never be able to request a band plan_band would reject.
+
+    The UI reads the carrier counts from this payload rather than re-deriving
+    anything in the browser, so a drift here would put the numbers on screen out
+    of step with the numbers the DSP actually uses.
+    """
+    from server import BAND_CHOICES, band_options
+
+    opts = band_options()
+    assert [o["hw_f_max"] for o in opts] == list(BAND_CHOICES)
+    for opt, hw in zip(opts, BAND_CHOICES):
+        band = plan_band(hw)
+        assert opt["n_carriers"] == band.n_carriers
+        assert opt["f_lo_hz"] == band.f_lo
+        assert opt["f_hi_hz"] == band.f_hi
+        assert opt["label"], "every chip needs a short label"
+        assert opt["describe"] == band.describe()

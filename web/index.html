@@ -65,6 +65,12 @@
         </div>
 
         <div class="field">
+          <label>硬件频响上限 <output id="bandValue">论文</output></label>
+          <div class="chips" id="bandChips"></div>
+          <div class="field-scale"><span id="bandRange">10.5–23.5 kHz</span><span id="bandCars">24 路 · 565 Hz</span></div>
+        </div>
+
+        <div class="field">
           <label>仿真倍速</label>
           <div class="chips" id="liveSpeedChips">
             <button class="chip active" data-speed="1">1×</button>
@@ -80,6 +86,7 @@
           <button id="stopBtn" class="btn ghost" disabled>停止</button>
         </div>
         <div class="session-line">会话日志 · <span id="sessionId" class="mono">—</span></div>
+        <div class="session-line">运行频带 · <span id="bandRun" class="mono">—</span></div>
       </section>
 
       <section class="card control-card hidden" id="replayControls">
@@ -364,7 +371,7 @@
           <h3>关键参数</h3>
           <dl class="param-list">
             <div><dt>CSI 帧率 / 决策率</dt><dd>50 Hz / 10 Hz</dd></div>
-            <div><dt>子载波</dt><dd>24（10.5–23.5 kHz）</dd></div>
+            <div><dt>子载波</dt><dd>≤24 路，按硬件频响上限规划</dd></div>
             <div><dt>运动窗口 / 时滞</dt><dd>1.0 s / 0.02 s</dd></div>
             <div><dt>一致性窗口</dt><dd>2.0 s</dd></div>
             <div><dt>呼吸窗口 / 滞后范围</dt><dd>8.0 s / 0.80–6.00 s</dd></div>

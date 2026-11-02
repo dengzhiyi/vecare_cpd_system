@@ -912,6 +912,8 @@ python replay_audio.py --emit-probe probe16k.wav --seconds <span class="s">300</
 <span class="c"># 在该带宽下跑全场景闭合自检</span>
 python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class="s">16000</span></div>
 
+  <p>以上是命令行路径。Web UI 侧栏也有「<b>硬件频响上限</b>」一栏，直接选档（论文 / 20k / 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时会写成 <span class="mono">17→16 路（已裁剪）</span>。</p>
+
   <div class="note warn">
     <b>先测硬件上限再配置，不要依赖兜底。</b>不传 <span class="mono">hw_f_max</span> 时运行时门控仍能消除误报，
     但载波是按 23.5 kHz 铺的，前端有效积分带宽被浪费，BPM 精度和运动灵敏度都吃亏。
@@ -1082,7 +1084,7 @@ python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 56 项<br>
+  数据来源：run_offline() 七场景（含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 57 项<br>
   代码位置：D:\WorkBuddy\VeCare扬声器活体检测\vecare_cpd_system　·　文档生成于 2026-11-02
 </footer>
 

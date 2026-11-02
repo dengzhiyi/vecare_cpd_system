@@ -39,6 +39,7 @@ from core.config import (  # noqa: E402
     MOTION_WINDOW_S,
     N_SUBCARRIERS,
     PRESENCE_RATIO,
+    plan_band,
 )
 from core.scenarios import SCENARIOS, list_scenarios  # noqa: E402
 from engine import SimulationEngine  # noqa: E402
@@ -48,6 +49,31 @@ WEB_DIR = BASE_DIR / "web"
 ENGINE = SimulationEngine(BASE_DIR / "data" / "sessions")
 
 STATIC_FILES = {"index.html", "styles.css", "app.js"}
+
+# Hardware ceilings the UI may offer. None is the paper's own band; the rest are
+# the driver specs we actually meet (see README, "硬件带宽受限"). plan_band
+# rejects anything below 14 kHz, so this list is also the validity range.
+BAND_CHOICES = (None, 20_000, 18_000, 16_000, 14_000)
+
+
+def band_options() -> list[dict]:
+    """Everything the UI needs to render one bandwidth chip, precomputed."""
+    out = []
+    for hw in BAND_CHOICES:
+        band = plan_band(hw)
+        out.append(
+            {
+                "hw_f_max": hw,
+                "label": "论文" if hw is None else f"{hw / 1000:.0f}k",
+                "f_lo_hz": band.f_lo,
+                "f_hi_hz": band.f_hi,
+                "n_carriers": band.n_carriers,
+                "spacing_hz": round(band.spacing_hz, 1),
+                "sweep_hz": [band.sweep_lo, band.sweep_hi],
+                "describe": band.describe(),
+            }
+        )
+    return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -103,7 +129,10 @@ class Handler(BaseHTTPRequestHandler):
                         "params": {
                             "csi_fs": CSI_FS,
                             "decision_fs": DECISION_FS,
-                            "subcarriers": N_SUBCARRIERS,
+                            # 24 is a ceiling, not the count actually used: the
+                            # carrier set is derived per hardware ceiling below.
+                            "subcarriers_ceiling": N_SUBCARRIERS,
+                            "bands": band_options(),
                             "motion_window_s": MOTION_WINDOW_S,
                             "breath_window_s": BREATH_WINDOW_S,
                             "evidence_window_s": EVIDENCE_WINDOW_S,

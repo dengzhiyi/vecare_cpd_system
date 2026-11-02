@@ -12,6 +12,8 @@ const S = {
   selected: 'sleeping',
   sensitivity: 1.0,
   speed: 1.0,
+  hwFMax: null,     // null = the paper band; otherwise the -3 dB ceiling in Hz
+  bands: [],
   truthVisible: true,
   live: {
     frames: [], events: [], status: null, scenario: null,
@@ -92,6 +94,8 @@ async function init() {
     const data = await api('/api/scenarios');
     S.scenarios = data.scenarios || [];
     S.params = data.params || {};
+    S.bands = S.params.bands || [];
+    renderBandChips();
     if (S.scenarios.length && !S.scenarios.some((s) => s.key === S.selected)) {
       S.selected = S.scenarios[0].key;
     }
@@ -119,6 +123,14 @@ function bindUI() {
   $('pauseBtn').addEventListener('click', togglePause);
   $('stopBtn').addEventListener('click', stopMonitor);
   $('ackBtn').addEventListener('click', acknowledge);
+
+  $('bandChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const raw = chip.dataset.hw;
+    S.hwFMax = raw == null || raw === '' ? null : Number(raw);
+    renderBandChips();
+  });
 
   $('sensitivity').addEventListener('input', (e) => {
     S.sensitivity = Number(e.target.value);
@@ -230,6 +242,34 @@ function renderScenarioNote() {
   $('selectedScenarioNote').textContent = `${sc.description} 预期：${sc.expected}`;
 }
 
+/* Hardware ceiling chips. The band itself is planned server-side (plan_band),
+   so the counts and edges shown here are always the ones the DSP will use --
+   nothing about the band is re-derived in the browser. */
+const fmtKHz = (v) => (v / 1000).toFixed(1);
+
+function renderBandChips() {
+  const box = $('bandChips');
+  if (!box) return;
+  if (!S.bands.length) {
+    box.innerHTML = '<button class="chip active" data-hw="">论文</button>';
+    return;
+  }
+  box.innerHTML = S.bands.map((b) => `
+    <button class="chip ${b.hw_f_max === S.hwFMax ? 'active' : ''}"
+            data-hw="${b.hw_f_max == null ? '' : b.hw_f_max}"
+            title="${esc(b.describe)}">${esc(b.label)}</button>
+  `).join('');
+  syncBandNote();
+}
+
+function syncBandNote() {
+  const band = S.bands.find((b) => b.hw_f_max === S.hwFMax) || S.bands[0];
+  if (!band) return;
+  $('bandValue').textContent = S.hwFMax == null ? '论文' : `${S.hwFMax / 1000}k`;
+  $('bandRange').textContent = `${fmtKHz(band.f_lo_hz)}–${fmtKHz(band.f_hi_hz)} kHz`;
+  $('bandCars').textContent = `${band.n_carriers} 路 · ${Math.round(band.spacing_hz)} Hz`;
+}
+
 async function startMonitor() {
   ensureAudio();
   $('startBtn').disabled = true;
@@ -240,6 +280,7 @@ async function startMonitor() {
         scenario: S.selected,
         sensitivity: S.sensitivity,
         speed: S.speed,
+        hw_f_max: S.hwFMax,
       }),
     });
     S.live.status = status;
@@ -308,7 +349,24 @@ function syncControls() {
   $('stopBtn').disabled = !running;
   $('sensitivity').disabled = running;
   $('scenarioList').classList.toggle('locked', running);
+  $('bandChips').classList.toggle('locked', running);
   $('sessionId').textContent = st.session_id || '—';
+  renderBandRun(st);
+}
+
+function renderBandRun(st) {
+  const r = st.band_range_hz;
+  if (!r || r[0] == null) {
+    $('bandRun').textContent = '—';
+    return;
+  }
+  const planned = st.carriers_planned;
+  const used = st.carriers_used;
+  let txt = `${fmtKHz(r[0])}–${fmtKHz(r[1])} kHz`;
+  if (used == null) txt += planned ? ` · ${planned} 路` : '';
+  else if (planned && used < planned) txt += ` · ${planned}→${used} 路（已裁剪）`;
+  else txt += ` · ${used} 路`;
+  $('bandRun').textContent = txt;
 }
 
 /* ------------------------------------------------------------------ */

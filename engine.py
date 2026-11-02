@@ -107,6 +107,11 @@ class SimulationEngine:
                 "duration_s": scenario.duration_s,
                 "sensitivity": cfg.sensitivity,
                 "band": band.describe(),
+                "f_lo_hz": band.f_lo,
+                "f_hi_hz": band.f_hi,
+                "hw_f_max_hz": None if hw_f_max is None else float(hw_f_max),
+                "carriers_planned": int(band.n_carriers),
+                "carrier_spacing_hz": round(band.spacing_hz, 1),
                 "detector_config": cfg.to_dict(),
                 "speed": speed,
                 "seed": int(seed),
@@ -259,6 +264,14 @@ class SimulationEngine:
             det = None
             if self.pipeline is not None:
                 det = self.pipeline.detector.snapshot(self.sim_t)
+            # The band is fixed at start; the count actually in use can drop
+            # once runtime health gating prunes dead carriers, so read it from
+            # the newest frame rather than echoing the plan.
+            carriers_used = None
+            if self.frames:
+                carriers_used = self.frames[-1]["features"].get("carriers_used")
+            elif self.pipeline is not None:
+                carriers_used = self.pipeline.n_carriers
             return {
                 "running": self.running,
                 "paused": self.paused,
@@ -270,6 +283,11 @@ class SimulationEngine:
                 "scenario": None if self.scenario is None else self.scenario.key,
                 "scenario_name": None if self.scenario is None else self.scenario.name,
                 "session_id": self.session_id,
+                "band": self.meta.get("band"),
+                "band_range_hz": [self.meta.get("f_lo_hz"), self.meta.get("f_hi_hz")],
+                "hw_f_max_hz": self.meta.get("hw_f_max_hz"),
+                "carriers_planned": self.meta.get("carriers_planned"),
+                "carriers_used": carriers_used,
                 "detector": det,
                 "summary": self.summary,
                 "frame_count": self.frames[-1]["seq"] if self.frames else 0,

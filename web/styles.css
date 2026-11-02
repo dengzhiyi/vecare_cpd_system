@@ -378,6 +378,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 .chip:hover { color: var(--text); border-color: var(--line-strong); }
 .chip.active {
@@ -385,6 +386,7 @@ input[type="range"]::-moz-range-thumb {
   border-color: rgba(71, 224, 192, 0.45);
   background: var(--teal-dim);
 }
+.chips.locked { opacity: 0.55; pointer-events: none; }
 
 .actions {
   position: relative;
