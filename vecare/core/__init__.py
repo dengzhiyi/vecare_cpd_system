@@ -1,0 +1,1 @@
+"""VeCare SAS prototype core."""

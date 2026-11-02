@@ -1,0 +1,86 @@
+{
+  "session_id": "20261102-160321-sleeping",
+  "app": "VeCare CPD 功能样机",
+  "started_at": "2026-11-02T16:03:21",
+  "scenario": {
+    "key": "sleeping",
+    "name": "入睡婴儿",
+    "subtitle": "Breathing only",
+    "description": "婴儿被留在后排儿童座椅上入睡，仅胸腔呼吸起伏（约 18 BPM），无肢体动作。",
+    "duration_s": 65,
+    "category": "presence",
+    "target": {
+      "enter_t": 9.0,
+      "exit_t": null,
+      "distance_m": 1.55,
+      "bpm": 18.0,
+      "chest_mm": 3.0,
+      "reflectivity": 0.03,
+      "breathing_windows": [
+        [
+          9.0,
+          200.0
+        ]
+      ],
+      "motion_events": [
+        {
+          "t": 9.0,
+          "duration": 1.0,
+          "amplitude_m": 0.16,
+          "kind": "settle"
+        }
+      ],
+      "awake_jitter_mm": 0.0,
+      "label": "入睡婴儿 · 18 BPM"
+    },
+    "noise_sigma": 0.02,
+    "noise_bursts": [],
+    "vibration_bursts": [],
+    "ambient": "停车场 · 闭窗 · 空调关闭",
+    "expected": "约 9 s 出现，呼吸检测确认后 10 s 内告警"
+  },
+  "scenario_key": "sleeping",
+  "scenario_name": "入睡婴儿",
+  "duration_s": 65,
+  "sensitivity": 1.0,
+  "detector_config": {
+    "motion_window_s": 2.0,
+    "motion_lag_s": 0.1,
+    "breath_window_s": 8.0,
+    "breath_lag_min_s": 1.0,
+    "breath_lag_max_s": 5.0,
+    "breath_min_height": 0.16,
+    "breath_min_prominence": 0.09,
+    "breath_conf_threshold": 0.5,
+    "evidence_window_s": 5.0,
+    "presence_ratio": 0.3,
+    "alarm_delay_s": 10.0,
+    "apnea_timeout_s": 15.0,
+    "clear_timeout_s": 25.0,
+    "calibration_s": 5.0,
+    "min_motion_threshold": 0.15,
+    "sensitivity": 1.0
+  },
+  "speed": 1.0,
+  "seed": 144652251,
+  "status": "completed",
+  "ended_at": "2026-11-02T16:03:40",
+  "sim_time_s": 65.0,
+  "frames": 631,
+  "events": 5,
+  "summary": {
+    "detected": true,
+    "presence_at": 15.68,
+    "detection_latency_s": 6.68,
+    "breathing_at": 14.18,
+    "alarm_at": 25.78,
+    "alarm_latency_s": 16.78,
+    "alarm_reason": "PRESENCE",
+    "apnea_escalated_at": null,
+    "bpm_mae": 0.258,
+    "bpm_samples": 509,
+    "false_presence_frames": 0,
+    "frames": 631,
+    "duration_s": 64.98
+  }
+}

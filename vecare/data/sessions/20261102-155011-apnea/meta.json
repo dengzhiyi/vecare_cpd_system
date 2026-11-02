@@ -1,0 +1,86 @@
+{
+  "session_id": "20261102-155011-apnea",
+  "app": "VeCare CPD 功能样机",
+  "started_at": "2026-11-02T15:50:11",
+  "scenario": {
+    "key": "apnea",
+    "name": "呼吸暂停",
+    "subtitle": "Apnea event",
+    "description": "婴儿入睡后被确认存在，但在 42 s 后呼吸停止，且无肢体动作，触发呼吸异常告警。",
+    "duration_s": 80,
+    "category": "critical",
+    "target": {
+      "enter_t": 9.0,
+      "exit_t": null,
+      "distance_m": 1.45,
+      "bpm": 20.0,
+      "chest_mm": 3.0,
+      "reflectivity": 0.032,
+      "breathing_windows": [
+        [
+          9.0,
+          42.0
+        ]
+      ],
+      "motion_events": [
+        {
+          "t": 9.0,
+          "duration": 1.0,
+          "amplitude_m": 0.16,
+          "kind": "settle"
+        }
+      ],
+      "awake_jitter_mm": 0.0,
+      "label": "呼吸暂停事件"
+    },
+    "noise_sigma": 0.02,
+    "noise_bursts": [],
+    "vibration_bursts": [],
+    "ambient": "停车场 · 闭窗 · 空调关闭",
+    "expected": "42 s 呼吸停止；15 s 无呼吸后触发 APNEA 告警"
+  },
+  "scenario_key": "apnea",
+  "scenario_name": "呼吸暂停",
+  "duration_s": 80,
+  "sensitivity": 1.0,
+  "detector_config": {
+    "motion_window_s": 2.0,
+    "motion_lag_s": 0.1,
+    "breath_window_s": 8.0,
+    "breath_lag_min_s": 1.0,
+    "breath_lag_max_s": 5.0,
+    "breath_min_height": 0.16,
+    "breath_min_prominence": 0.09,
+    "breath_conf_threshold": 0.5,
+    "evidence_window_s": 5.0,
+    "presence_ratio": 0.3,
+    "alarm_delay_s": 10.0,
+    "apnea_timeout_s": 15.0,
+    "clear_timeout_s": 25.0,
+    "calibration_s": 5.0,
+    "min_motion_threshold": 0.15,
+    "sensitivity": 1.0
+  },
+  "speed": 1.0,
+  "seed": 880850639,
+  "status": "completed",
+  "ended_at": "2026-11-02T15:51:31",
+  "sim_time_s": 80.0,
+  "frames": 781,
+  "events": 6,
+  "summary": {
+    "detected": true,
+    "presence_at": 15.58,
+    "detection_latency_s": 6.58,
+    "breathing_at": 14.08,
+    "alarm_at": 25.68,
+    "alarm_latency_s": 16.68,
+    "alarm_reason": "PRESENCE",
+    "apnea_escalated_at": 61.08,
+    "bpm_mae": 0.28,
+    "bpm_samples": 280,
+    "false_presence_frames": 0,
+    "frames": 781,
+    "duration_s": 79.98
+  }
+}
