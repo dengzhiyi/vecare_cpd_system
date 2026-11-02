@@ -77,6 +77,7 @@
             <button class="chip" data-speed="2">2×</button>
             <button class="chip" data-speed="4">4×</button>
             <button class="chip" data-speed="8">8×</button>
+            <button class="chip" data-speed="16">16×</button>
           </div>
         </div>
 
@@ -107,6 +108,8 @@
             <button class="chip active" data-speed="1">1×</button>
             <button class="chip" data-speed="2">2×</button>
             <button class="chip" data-speed="4">4×</button>
+            <button class="chip" data-speed="8">8×</button>
+            <button class="chip" data-speed="16">16×</button>
           </div>
         </div>
         <div id="downloadLinks" class="downloads"></div>
@@ -336,7 +339,7 @@
       <div class="about-grid">
         <div class="about-card">
           <h3>1 · 声学通道</h3>
-          <p>复用扬声器播放在 10 kHz 以上的 Kasami 探测序列，单麦克风以 48 kHz 采样；每 20 ms 估计一次 24 个子载波的 CSI。</p>
+          <p>复用扬声器播放在 10 kHz 以上的线性 chirp 探测序列（可选 MLS），单麦克风以 48 kHz 采样；每 20 ms 估计一次 CSI，子载波数随硬件频带规划（最多 24 个）。</p>
           <code>H(f,t) = Σ<sub>r</sub> a<sub>r</sub>(t) exp(−j2πfτ<sub>r</sub>(t)) + N(f,t)</code>
         </div>
         <div class="about-card">

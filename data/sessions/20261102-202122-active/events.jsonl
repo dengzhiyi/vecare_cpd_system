@@ -1,5 +1,0 @@
-{"t":5.08,"kind":"state","message":"背景校准完成"}
-{"t":13.98,"kind":"presence","message":"检测到车内儿童（呼吸证据持续）"}
-{"t":13.98,"kind":"state","message":"监测中 · 无儿童 → 检测到儿童"}
-{"t":19.88,"kind":"alarm","message":"儿童被留在车内，触发儿童存在告警"}
-{"t":19.88,"kind":"state","message":"检测到儿童 → 告警"}

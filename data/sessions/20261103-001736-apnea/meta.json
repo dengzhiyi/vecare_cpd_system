@@ -1,25 +1,25 @@
 {
-  "session_id": "20261102-202025-sleeping",
+  "session_id": "20261103-001736-apnea",
   "app": "VeCare CPD 功能样机",
-  "started_at": "2026-11-02T20:20:25",
+  "started_at": "2026-11-03T00:17:36",
   "scenario": {
-    "key": "sleeping",
-    "name": "入睡婴儿",
-    "subtitle": "Breathing only",
-    "description": "婴儿被留在后排儿童座椅上入睡，仅胸腔呼吸起伏（约 18 BPM），无肢体动作。",
-    "duration_s": 65,
-    "category": "presence",
+    "key": "apnea",
+    "name": "呼吸暂停",
+    "subtitle": "Apnea event",
+    "description": "婴儿入睡后被确认存在，但在 42 s 后呼吸停止，且无肢体动作，触发呼吸异常告警。",
+    "duration_s": 80,
+    "category": "critical",
     "target": {
       "enter_t": 9.0,
       "exit_t": null,
-      "distance_m": 1.55,
-      "bpm": 18.0,
+      "distance_m": 1.45,
+      "bpm": 20.0,
       "chest_mm": 3.0,
-      "reflectivity": 0.03,
+      "reflectivity": 0.032,
       "breathing_windows": [
         [
           9.0,
-          200.0
+          42.0
         ]
       ],
       "motion_events": [
@@ -31,18 +31,24 @@
         }
       ],
       "awake_jitter_mm": 0.0,
-      "label": "入睡婴儿 · 18 BPM"
+      "label": "呼吸暂停事件"
     },
     "noise_sigma": 0.02,
     "noise_bursts": [],
     "vibration_bursts": [],
     "ambient": "停车场 · 闭窗 · 空调关闭",
-    "expected": "约 9 s 出现，呼吸检测确认后 10 s 内告警"
+    "expected": "42 s 呼吸停止；约 15–18 s 后升级为 APNEA 告警"
   },
-  "scenario_key": "sleeping",
-  "scenario_name": "入睡婴儿",
-  "duration_s": 65,
+  "scenario_key": "apnea",
+  "scenario_name": "呼吸暂停",
+  "duration_s": 80,
   "sensitivity": 1.0,
+  "band": "24 carriers @ 10.5-23.5 kHz (565 Hz spacing, diversity 5.20), sweep 9.8-23.9 kHz",
+  "f_lo_hz": 10500.0,
+  "f_hi_hz": 23500.0,
+  "hw_f_max_hz": null,
+  "carriers_planned": 24,
+  "carrier_spacing_hz": 565.2,
   "detector_config": {
     "motion_window_s": 1.0,
     "motion_lag_s": 0.02,
@@ -65,31 +71,31 @@
     "evidence_gap_reset_s": 5.0,
     "sensitivity": 1.0
   },
-  "speed": 16.0,
-  "seed": 7,
+  "speed": 8.0,
+  "seed": 422991500,
   "status": "completed",
-  "ended_at": "2026-11-02T20:20:29",
-  "sim_time_s": 65.0,
-  "frames": 641,
-  "events": 5,
+  "ended_at": "2026-11-03T00:17:46",
+  "sim_time_s": 80.0,
+  "frames": 791,
+  "events": 6,
   "summary": {
     "detected": true,
-    "presence_at": 15.58,
+    "presence_at": 14.78,
     "confirmed_by": "breathing",
-    "detection_latency_s": 6.58,
-    "breathing_at": 14.08,
-    "alarm_at": 24.18,
-    "alarm_latency_s": 15.18,
-    "response_time_s": 10.1,
+    "detection_latency_s": 5.78,
+    "breathing_at": 13.58,
+    "alarm_at": 20.18,
+    "alarm_latency_s": 11.18,
+    "response_time_s": 10.0,
     "alarm_reason": "PRESENCE",
-    "apnea_escalated_at": null,
-    "bpm_mae": 0.299,
-    "bpm_samples": 510,
+    "apnea_escalated_at": 61.38,
+    "bpm_mae": 0.387,
+    "bpm_samples": 285,
     "false_presence_frames": 0,
-    "motion_evidence_frames": 0,
-    "mrc_neff": 21.63,
+    "motion_evidence_frames": 3,
+    "mrc_neff": 18.94,
     "interference_frames": 0,
-    "frames": 641,
-    "duration_s": 64.98
+    "frames": 791,
+    "duration_s": 79.98
   }
 }

@@ -52,7 +52,8 @@ STATIC_FILES = {"index.html", "styles.css", "app.js"}
 
 # Hardware ceilings the UI may offer. None is the paper's own band; the rest are
 # the driver specs we actually meet (see README, "硬件带宽受限"). plan_band
-# rejects anything below 14 kHz, so this list is also the validity range.
+# rejects ceilings that leave fewer than four carriers (below ~12.75 kHz), and
+# the API deliberately exposes only this tested set.
 BAND_CHOICES = (None, 20_000, 18_000, 16_000, 14_000)
 
 
@@ -192,12 +193,27 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": f"unknown scenario: {key}"}, 400)
                     return
                 hw = body.get("hw_f_max")
+                if hw in (None, "", 0):
+                    hw_f_max = None
+                else:
+                    try:
+                        hw_f_max = float(hw)
+                    except (TypeError, ValueError):
+                        self._send_json({"error": f"invalid hw_f_max: {hw}"}, 400)
+                        return
+                    if hw_f_max not in BAND_CHOICES:
+                        valid = [int(v) for v in BAND_CHOICES if v is not None]
+                        self._send_json(
+                            {"error": f"hw_f_max must be null or one of {valid}"},
+                            400,
+                        )
+                        return
                 status = ENGINE.start(
                     scenario_key=key,
                     sensitivity=float(body.get("sensitivity", 1.0)),
                     speed=float(body.get("speed", 1.0)),
                     seed=body.get("seed"),
-                    hw_f_max=None if hw in (None, "", 0) else float(hw),
+                    hw_f_max=hw_f_max,
                 )
                 self._send_json(status, 201)
                 return

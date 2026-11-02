@@ -61,7 +61,9 @@ def test_motion_presence_then_alarm_within_budget():
     assert snap["state"] == "ALARM"
     # the budget is counted from the first evidence sample, so confirmation
     # latency is charged against it rather than added on top
-    assert det.alarm_since - first_evidence == pytest.approx(cfg.response_budget_s, abs=0.2)
+    assert det.alarm_since - first_evidence == pytest.approx(
+        cfg.response_budget_s, abs=1e-6
+    )
 
 
 def test_incoherent_noise_never_confirms_presence():
@@ -114,6 +116,33 @@ def test_acknowledge_mutes_but_keeps_presence():
     assert snap["state"] == "ACKED"
 
 
+def test_acknowledged_alarm_clears_after_evidence_disappears():
+    """Muting is not a latch: once the cabin is quiet the system must reset."""
+    cfg = DetectorConfig(
+        calibration_s=1.0, response_budget_s=2.0, clear_timeout_s=2.0
+    )
+    det = CPDDetector(cfg)
+    t = _calibrate(cfg, det)
+    for _ in range(60):
+        snap = det.update(t, MOVING, INVALID_PEAK)
+        t += 0.1
+        if snap["alarm"]:
+            break
+    assert snap["alarm"] is True
+    det.acknowledge(t)
+    assert det.state == "ACKED"
+
+    for _ in range(30):
+        snap = det.update(t, QUIET, INVALID_PEAK)
+        t += 0.1
+        if not snap["presence"]:
+            break
+    assert snap["presence"] is False
+    assert snap["alarm"] is False
+    assert snap["acknowledged"] is False
+    assert snap["state"] == "MONITORING"
+
+
 def test_breathing_stop_escalates_to_apnea():
     cfg = DetectorConfig(calibration_s=1.0, response_budget_s=120.0, apnea_timeout_s=3.0)
     det = CPDDetector(cfg)
@@ -144,7 +173,7 @@ def test_offline_sleeping_scenario_meets_response_budget():
     assert m["alarm_at"] is not None
     # the paper's 10 s requirement governs the budget measured from the first
     # evidence sample, not the confirmation moment
-    assert m["response_time_s"] is not None and m["response_time_s"] <= 10.3
+    assert m["response_time_s"] is not None and m["response_time_s"] <= 10.05
     assert m["alarm_reason"] == "PRESENCE"
     assert m["bpm_mae"] is not None and m["bpm_mae"] < 2.0
 

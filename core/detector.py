@@ -240,11 +240,13 @@ class CPDDetector:
                 "检测到车内儿童（%s证据持续）" % ("运动" if motion_det else "呼吸")
             )
 
-        # Presence latch release: only after a long evidence-free period, and
-        # only if no alarm is active (alarms remain until acknowledged).
+        # Presence latch release: after a long evidence-free period. An
+        # unacknowledged alarm stays latched until the operator responds;
+        # once acknowledged, silence means the child has left, so the alarm
+        # and the presence latch are both cleared and monitoring resumes.
         if (
             self.presence
-            and not self.alarm
+            and (not self.alarm or self.acknowledged)
             and self.last_evidence_t is not None
             and t - self.last_evidence_t > self.cfg.clear_timeout_s
         ):
@@ -252,6 +254,17 @@ class CPDDetector:
             self.presence_since = None
             self.presence_score = 0.0
             self.first_evidence_t = None
+            self.last_evidence_t = None
+            self.last_motion_t = None
+            self.last_breath_t = None
+            self.breathing_ever = False
+            self.bpm = None
+            self.bpm_history.clear()
+            self.alarm = False
+            self.alarm_reason = None
+            self.alarm_since = None
+            self.acknowledged = False
+            self.countdown = self.cfg.response_budget_s
             self._event(t, "cleared", "连续无存在证据，恢复安全状态")
 
         # Apnea alarm: confirmed breathing presence, then breathing stops while
@@ -271,7 +284,10 @@ class CPDDetector:
             self.countdown = max(0.0, self.cfg.response_budget_s - (t - anchor))
             if apnea:
                 self._raise_alarm(t, "APNEA", "检测到儿童呼吸停止，触发呼吸异常告警")
-            elif self.countdown <= 0:
+            elif self.countdown <= 1e-6:
+                # Floating-point accumulation across 50 Hz frames can leave the
+                # last frame a few ulps short of the budget; without the guard
+                # a 10.0 s budget fires one decision frame late (10.1 s).
                 self._raise_alarm(t, "PRESENCE", "儿童被留在车内，触发儿童存在告警")
         elif self.alarm and apnea and self.alarm_reason != "APNEA":
             # Already alarming for presence: escalate the reason if breathing

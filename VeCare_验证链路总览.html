@@ -862,7 +862,7 @@ MRC 有效子载波 19.19 / 24
         <li>下限固定 <b>10.5 kHz</b>：三个档位的高通都是 10 kHz，这 500 Hz 就是它的余量，只有顶部随硬件移动</li>
         <li>载波数 = 带宽 / <b>250 Hz</b> 封顶，保证相邻载波仍能去相关</li>
         <li>扫频带随之收窄，不向发不出的频率送能量</li>
-        <li>低于 14 kHz 直接报错，不给出一个注定失效的配置</li>
+        <li>低于 <b>12.75 kHz</b> 直接报错（不足 4 路载波）；UI / API 只提供 14 kHz 及以上档位</li>
       </ul>
     </div>
     <div class="path">
@@ -1084,8 +1084,8 @@ python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 57 项<br>
-  代码位置：D:\WorkBuddy\VeCare扬声器活体检测\vecare_cpd_system　·　文档生成于 2026-11-02
+  数据来源：run_offline() 七场景（含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 58 项<br>
+  代码位置：vecare_cpd_system（仓库根目录）　·　文档生成于 2026-11-02
 </footer>
 
 </div>

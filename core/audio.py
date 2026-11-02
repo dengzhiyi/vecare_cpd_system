@@ -379,9 +379,9 @@ def carrier_health(
     The baseline is a *low* percentile, not the median, and that matters: once
     half the band is dead the median has already moved into the dead carriers,
     so ``3 x median`` sits above them and prunes nothing. Measured at an 18 kHz
-    ceiling, the median lands at 0.11 (threshold 0.34) while the 25th
-    percentile stays at 0.028 (threshold 0.084) -- the difference between two
-    carriers surviving and twelve.
+    ceiling, the median lands at 0.11 while the 25th percentile stays at 0.028;
+    with the absolute floor the threshold is ``max(0.15, 3 x 0.028) = 0.15``,
+    which still prunes the three rolled-off carriers.
 
     The test is relative on purpose: absolute jitter would flag every carrier
     at once whenever the cabin is loud, while a dead carrier stays an order of

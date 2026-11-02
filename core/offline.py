@@ -1,6 +1,6 @@
 """Offline scenario runner and prototype metrics.
 
-Used by the test-suite and by the `tools.evaluate` entry point: no wall-clock
+Used by the test-suite and by ``replay_audio.py --selfcheck``: no wall-clock
 pacing, so an entire scenario can be scored in a fraction of the time.
 """
 from __future__ import annotations
