@@ -13,11 +13,11 @@ import zlib
 from datetime import datetime
 from pathlib import Path
 
-from vecare.core.channel import AcousticChannel
-from vecare.core.config import CSI_FS, DetectorConfig
-from vecare.core.offline import evaluate_frames
-from vecare.core.pipeline import SASPipeline
-from vecare.core.scenarios import get_scenario
+from core.channel import AcousticChannel
+from core.config import CSI_FS, DetectorConfig
+from core.offline import evaluate_frames
+from core.pipeline import SASPipeline
+from core.scenarios import get_scenario
 
 SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 

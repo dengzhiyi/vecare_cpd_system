@@ -1,9 +1,9 @@
 """Detection state-machine, alarm timing and offline scenario tests."""
 import pytest
 
-from vecare.core.config import DetectorConfig
-from vecare.core.detector import CPDDetector
-from vecare.core.offline import run_offline
+from core.config import DetectorConfig
+from core.detector import CPDDetector
+from core.offline import run_offline
 
 INVALID_PEAK = {"valid": False, "confidence": 0.0, "bpm": None}
 VALID_PEAK = {"valid": True, "confidence": 0.9, "bpm": 20.0}

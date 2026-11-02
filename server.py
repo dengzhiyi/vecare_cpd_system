@@ -27,9 +27,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from vecare.core.config import (  # noqa: E402
+from core.config import (  # noqa: E402
     ALARM_DELAY_S,
     APNEA_TIMEOUT_S,
     BREATH_WINDOW_S,
@@ -40,8 +40,8 @@ from vecare.core.config import (  # noqa: E402
     N_SUBCARRIERS,
     PRESENCE_RATIO,
 )
-from vecare.core.scenarios import SCENARIOS, list_scenarios  # noqa: E402
-from vecare.engine import SimulationEngine  # noqa: E402
+from core.scenarios import SCENARIOS, list_scenarios  # noqa: E402
+from engine import SimulationEngine  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"

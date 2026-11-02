@@ -21,20 +21,19 @@
 .
 ├── README.md
 ├── .gitignore
-└── vecare/
-    ├── server.py              # HTTP 服务入口（标准库 ThreadingHTTPServer）
-    ├── engine.py              # 实时仿真引擎与会话记录
-    ├── core/
-    │   ├── config.py          # 采样率、窗口、阈值等参数
-    │   ├── channel.py         # 座舱多径声学信道仿真
-    │   ├── scenarios.py       # 七个验证场景
-    │   ├── dsp.py             # ACF / 运动统计 / MRC / 呼吸峰
-    │   ├── detector.py        # 状态机、证据窗口与告警逻辑
-    │   ├── pipeline.py        # 在线特征流水线
-    │   └── offline.py         # 离线评估与指标
-    ├── web/                   # 原生 HTML/CSS/JS 前端
-    ├── tests/                 # pytest 单元与场景测试
-    └── data/sessions/         # 示例会话日志（可回放）
+├── server.py                # HTTP 服务入口（标准库 ThreadingHTTPServer）
+├── engine.py                # 实时仿真引擎与会话记录
+├── core/
+│   ├── config.py            # 采样率、窗口、阈值等参数
+│   ├── channel.py           # 座舱多径声学信道仿真
+│   ├── scenarios.py         # 七个验证场景
+│   ├── dsp.py               # ACF / 运动统计 / MRC / 呼吸峰
+│   ├── detector.py          # 状态机、证据窗口与告警逻辑
+│   ├── pipeline.py          # 在线特征流水线
+│   └── offline.py           # 离线评估与指标
+├── web/                     # 原生 HTML/CSS/JS 前端
+├── tests/                   # pytest 单元与场景测试
+└── data/sessions/           # 示例会话日志（可回放）
 ```
 
 ## 运行
@@ -45,7 +44,7 @@
 pip install numpy scipy pytest
 
 cd /workspace
-python3 vecare/server.py --port 8090
+python3 server.py --port 8090
 ```
 
 浏览器打开 `http://127.0.0.1:8090`，选择场景后点击「开始监测」，可调整灵敏度与 1–16× 倍速。
@@ -54,7 +53,7 @@ python3 vecare/server.py --port 8090
 
 ```bash
 cd /workspace
-python3 -m pytest vecare/tests -q
+python3 -m pytest tests -q
 ```
 
 覆盖：ACF 周期峰、运动统计量、MRC 合并、呼吸峰提取、校准状态迁移、存在确认与 10 s 告警计时、APNEA 升级、确认静音，以及空车厢/睡眠婴儿离线场景指标。

@@ -1,8 +1,8 @@
 """Unit tests for the SAS signal-processing core."""
 import numpy as np
 
-from vecare.core.config import DetectorConfig
-from vecare.core.dsp import (
+from core.config import DetectorConfig
+from core.dsp import (
     autocorr,
     combine_acf,
     compute_features,
