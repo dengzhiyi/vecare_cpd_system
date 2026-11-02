@@ -146,7 +146,7 @@ _add(Scenario(
     key="stress",
     name="噪声压力测试",
     subtitle="No child",
-    description="空车厢中叠加关门、车外谈话与车辆经过等瞬态噪声，验证告警抑制。",
+    description="空车厢中叠加关门、车外谈话、车辆经过，以及一段持续 3.4 s 的强噪声，验证告警抑制。",
     duration_s=65,
     category="baseline",
     noise_sigma=0.024,
@@ -154,12 +154,15 @@ _add(Scenario(
         {"t": 16.0, "duration": 0.8, "multiplier": 4.5},
         {"t": 31.0, "duration": 2.6, "multiplier": 2.2},
         {"t": 46.0, "duration": 1.0, "multiplier": 3.8},
+        # sustained interference: exercises both the coherence gate and the
+        # impulse-pattern detector
+        {"t": 55.0, "duration": 3.4, "multiplier": 2.6},
     ],
     vibration_bursts=[
         {"t": 16.0, "duration": 0.3, "amplitude_mm": 0.06},
         {"t": 46.0, "duration": 0.3, "amplitude_mm": 0.05},
     ],
-    expected="瞬态噪声不应形成持续存在证据，保持 SAFE",
+    expected="瞬态与持续噪声都不应形成存在证据，保持 SAFE",
 ))
 
 _add(Scenario(

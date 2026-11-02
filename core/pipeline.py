@@ -1,8 +1,8 @@
 """SAS feature pipeline shared by the real-time engine and offline evaluation.
 
-The pipeline keeps a sliding CSI-amplitude buffer, computes the motion statistic
-every 100 ms (10 Hz decisions), tracks breathing through the MRC-combined ACF
-and feeds both into the CPD state machine.
+The pipeline keeps a sliding CSI-amplitude buffer, computes the motion channel
+on a short (1 s) window and the breathing channel on a long (8 s) window every
+100 ms (10 Hz decisions), then feeds both into the CPD state machine.
 """
 from __future__ import annotations
 
@@ -34,16 +34,14 @@ class SASPipeline:
             return None
 
         n = len(self.hist)
-        if n < int(round(self.cfg.motion_window_s * CSI_FS)):
+        motion_n = int(round(self.cfg.motion_window_s * CSI_FS))
+        if n < motion_n:
             return None
 
         A = np.asarray(self.hist)
-        features = compute_features(
-            A[-int(round(self.cfg.motion_window_s * CSI_FS)):], A, self.cfg, fs=CSI_FS
-        )
+        features = compute_features(A[-motion_n:], A, self.cfg, fs=CSI_FS)
         det = self.detector
-        allow_breath = not (features["motion"] > det.motion_threshold) if det.calibrated else True
-        snap = det.update(t, features["motion"], features["peak"], allow_breath)
+        snap = det.update(t, features, features["peak"])
 
         self.seq += 1
         peak = features["peak"]
@@ -52,7 +50,11 @@ class SASPipeline:
             "t": round(float(t), 2),
             "state": snap,
             "features": {
-                "motion": round(float(features["motion"]), 4),
+                # decision statistic: residual energy / calibrated background
+                "motion": snap["motion_ratio"],
+                "motion_energy": round(float(features["energy"]), 4),
+                "motion_coherence": round(float(features["coherence"]), 3),
+                "interference": bool(features["interference"]),
                 "gains": [round(float(g), 4) for g in features["gains"]],
                 "bpm_raw": None if peak.get("bpm") is None else round(float(peak["bpm"]), 1),
                 "confidence": round(float(peak.get("confidence", 0.0)), 3),

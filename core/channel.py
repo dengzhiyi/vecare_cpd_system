@@ -66,10 +66,14 @@ class AcousticChannel:
                 offset += ev["amplitude_m"] * 0.5 * (1 - np.cos(2 * np.pi * u))
 
         if tg.awake_jitter_mm > 0:
-            # slow, smooth body sway (±1–2 mm)
+            # Slow postural drift of an awake body (<0.15 Hz). It must stay
+            # well below the 10-66 BPM breathing band: a coherent 0.2-0.4 Hz
+            # wobble is a second breathing rhythm and makes the breathing rate
+            # genuinely ambiguous, which is a modelling artefact rather than a
+            # sensing challenge.
             j = tg.awake_jitter_mm / 1000.0
-            offset += j * (0.6 * np.sin(2 * np.pi * 0.23 * t + 0.4)
-                           + 0.4 * np.sin(2 * np.pi * 0.41 * t + 1.7))
+            offset += j * (0.6 * np.sin(2 * np.pi * 0.06 * t + 0.4)
+                           + 0.4 * np.sin(2 * np.pi * 0.11 * t + 1.7))
         return offset
 
     def _noise_sigma(self, t: float) -> float:
@@ -122,7 +126,12 @@ class AcousticChannel:
                 u = (t - b["t"]) / b["duration"]
                 vib_amp = b["amplitude_mm"] / 1000.0 * np.sin(np.pi * u) ** 2
         if vib_amp > 0:
-            delays = delays + vib_amp * np.sin(
+            # vib_amp is a *displacement* in metres; delays are in seconds, so
+            # it has to be divided by the speed of sound. Adding metres to
+            # seconds inflated a 0.05 mm panel vibration into 50 us of delay
+            # jitter (17 mm of apparent motion) and made every door slam look
+            # like a moving body.
+            delays = delays + (vib_amp / SOUND_SPEED) * np.sin(
                 2 * np.pi * 120.0 * t + self._vib_phase
             )
 

@@ -30,7 +30,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.config import (  # noqa: E402
-    ALARM_DELAY_S,
+    RESPONSE_BUDGET_S,
     APNEA_TIMEOUT_S,
     BREATH_WINDOW_S,
     CSI_FS,
@@ -108,7 +108,7 @@ class Handler(BaseHTTPRequestHandler):
                             "breath_window_s": BREATH_WINDOW_S,
                             "evidence_window_s": EVIDENCE_WINDOW_S,
                             "presence_ratio": PRESENCE_RATIO,
-                            "alarm_delay_s": ALARM_DELAY_S,
+                            "response_budget_s": RESPONSE_BUDGET_S,
                             "apnea_timeout_s": APNEA_TIMEOUT_S,
                         },
                     }

@@ -428,7 +428,7 @@ function renderHero(det, last, opts) {
   $('motionBar').style.width = `${pct(motionRatio)}%`;
   $('motionBar').style.background = motion != null && threshold != null && motion > threshold
     ? 'linear-gradient(90deg, #f2b35c, #ff8a6b)' : 'linear-gradient(90deg, #47e0c0, #5cc8ff)';
-  $('motionText').textContent = threshold == null ? '阈值 —' : `阈值 ${fmt2(threshold)}${motion != null && motion > threshold ? ' · 已超阈' : ''}`;
+  $('motionText').textContent = threshold == null ? '阈值 —' : `能量比阈值 ${fmt2(threshold)}${motion != null && motion > threshold ? ' · 已超阈' : ''}`;
 
   const score = det ? det.presence_score : null;
   $('scoreValue').textContent = score == null ? '—' : (score * 100).toFixed(0);
@@ -436,16 +436,17 @@ function renderHero(det, last, opts) {
   $('scoreBar').style.background = state === 'ALARM'
     ? 'linear-gradient(90deg, #ff6070, #ff8a6b)' : 'linear-gradient(90deg, #47e0c0, #5cc8ff)';
 
+  const budget = det && det.response_budget_s ? det.response_budget_s : 10;
   let cdValue = '—';
-  let cdText = '10 s 内报警要求';
+  let cdText = `${budget.toFixed(0)} s 响应预算`;
   let cdRatio = 0;
   if (det && det.alarm) {
     cdText = det.acknowledged ? '告警已静音' : '告警已触发';
     cdRatio = 1;
   } else if (det && det.presence && det.countdown != null) {
     cdValue = fmt1(det.countdown);
-    cdRatio = clamp(det.countdown / 10, 0, 1);
-    cdText = '存在确认后响应倒计时';
+    cdRatio = clamp(det.countdown / Math.max(1, budget), 0, 1);
+    cdText = '响应预算倒计时（自首个证据）';
   }
   $('countdownValue').textContent = cdValue;
   $('countdownText').textContent = cdText;
@@ -706,7 +707,7 @@ function drawMotionChart(frames, det) {
   const sel = frames.filter((f) => f.t >= xMin && f.t <= xMax);
   const threshold = det ? det.motion_threshold : (sel.length ? sel[sel.length - 1].state.motion_threshold : 0.15);
   const vals = sel.map((f) => f.features.motion);
-  const rawMax = Math.max(0.18, threshold * 1.7, ...vals);
+  const rawMax = Math.max(1.2, threshold * 1.7, ...vals);
   const yMax = niceCeil(rawMax, 0.1);
   const rect = plotRect(w, h);
   drawAxes(ctx, rect, xMin, xMax, 0, yMax, {
@@ -738,7 +739,7 @@ function drawMotionChart(frames, det) {
 
   const cur = frames.length && frames[frames.length - 1].features
     ? frames[frames.length - 1].features.motion : null;
-  $('motionFoot').textContent = cur == null ? '—' : `当前 ${cur.toFixed(3)} · 阈值 ${threshold.toFixed(2)}`;
+  $('motionFoot').textContent = cur == null ? '—' : `当前 ${cur.toFixed(2)} · 阈值 ${threshold.toFixed(2)}`;
 }
 
 function drawBpmChart(frames, det) {

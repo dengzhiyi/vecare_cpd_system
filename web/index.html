@@ -148,10 +148,10 @@
             <em id="confText">置信度 —</em>
           </div>
           <div class="metric">
-            <span>运动统计 <small>g(f)</small></span>
+            <span>运动能量比 <small>δ/δ₀</small></span>
             <div class="metric-value"><b id="motionValue">—</b></div>
             <div class="mini-bar"><i id="motionBar"></i></div>
-            <em id="motionText">阈值 —</em>
+            <em id="motionText">能量比阈值 —</em>
           </div>
           <div class="metric">
             <span>存在证据</span>
@@ -163,7 +163,7 @@
             <span>响应倒计时</span>
             <div class="metric-value"><b id="countdownValue">—</b><small>s</small></div>
             <div class="mini-bar"><i id="countdownBar"></i></div>
-            <em id="countdownText">10 s 内报警要求</em>
+            <em id="countdownText">10 s 响应预算</em>
           </div>
         </div>
       </section>
@@ -263,12 +263,12 @@
       <div class="charts-grid">
         <section class="card chart-card">
           <div class="card-head">
-            <h2>运动统计 g(f)</h2>
-            <span class="hint">ACF @ 100 ms lag</span>
+            <h2>运动能量比 δ/δ₀</h2>
+            <span class="hint">1 s 窗去趋势残差能量</span>
           </div>
           <canvas id="motionChart" height="200"></canvas>
           <div class="chart-foot">
-            <span>高通滤波后 CSI ACF 短时滞抽头</span>
+            <span>归一化至校准基线 δ₀，虚线为判决门限</span>
             <b id="motionFoot" class="mono">—</b>
           </div>
         </section>
@@ -334,8 +334,8 @@
         </div>
         <div class="about-card">
           <h3>2 · 统计特征</h3>
-          <p>对每个子载波的 CSI 振幅去均值、去线性趋势后求无偏 ACF。短时滞（100 ms）抽头即运动统计 g(f)，8 s 窗口的 ACF 用于呼吸周期。</p>
-          <code>ρ(f,τ) = ACF(|H(f,t)|) &nbsp;·&nbsp; g(f) = ρ(f, 100 ms)</code>
+          <p>运动通道取 1 s 窗原始振幅，去均值 + 去线性趋势后的残差能量，按校准基线归一化；再用子载波一致性 κ 剔除不相关的环境噪声。呼吸通道在 8 s 窗上去趋势求 ACF，按 g(f) 做 MRC 合并。</p>
+          <code>ρ(f,τ) = ACF(|H(f,t)|) &nbsp;·&nbsp; g(f) = ρ(f, 20 ms) &nbsp;·&nbsp; δ = E[(|H| − fit)²]</code>
         </div>
         <div class="about-card">
           <h3>3 · MRC 合并</h3>
@@ -344,7 +344,7 @@
         </div>
         <div class="about-card">
           <h3>4 · 呼吸与存在判决</h3>
-          <p>在 1–5 s 的滞后范围内寻找显著峰 τ<sub>b</sub>，换算呼吸率；5 s 窗口内运动或呼吸证据占比 ≥ 30% 即确认存在，随后启动 10 s 响应倒计时。</p>
+          <p>在 0.8–6 s 的滞后范围内寻找显著峰 τ<sub>b</sub>（显著度在完整 ACF 上计算，并对 τ/2 谐波做下降一级处理），换算呼吸率；5 s 窗口内运动或呼吸证据占比 ≥ 30% 即确认存在。10 s 响应预算自首个证据起算，确认与告警共用同一预算。</p>
           <code>BPM = 60 / τ<sub>b</sub> &nbsp;·&nbsp; presence = mean(evidence<sub>5s</sub>) ≥ 0.30</code>
         </div>
       </div>
@@ -355,7 +355,7 @@
           <ul class="about-list">
             <li><b>CALIBRATING</b> 5 s 背景校准，自适应运动阈值 = max(下限, 中位数 + 3.5×MAD)</li>
             <li><b>MONITORING</b> 无存在证据，持续监测</li>
-            <li><b>PRESENCE</b> 证据占比超过 30%，启动 10 s 响应倒计时</li>
+            <li><b>PRESENCE</b> 证据占比超过 30%，确认存在；10 s 预算自首个证据起算</li>
             <li><b>ALARM</b> 超时未确认触发存在告警；已确认存在后 15 s 无呼吸升级为 APNEA 告警</li>
             <li><b>ACKED</b> 用户静音，但存在状态保持，直至证据消失 25 s</li>
           </ul>
@@ -388,7 +388,7 @@
         <p>每次监测写入 <span class="mono">data/sessions/&lt;会话 ID&gt;/</span>：</p>
         <ul class="about-list">
           <li><span class="mono">meta.json</span> 场景、参数、汇总指标</li>
-          <li><span class="mono">frames.jsonl</span> 10 Hz 决策帧：运动统计、呼吸率、置信度、ACF、CSI、真值</li>
+          <li><span class="mono">frames.jsonl</span> 10 Hz 决策帧：运动能量比、子载波一致性、呼吸率、置信度、ACF、CSI、真值</li>
           <li><span class="mono">events.jsonl</span> 校准、存在、告警、升级、静音等事件</li>
         </ul>
         <p>回放视图读取同一份日志，重建状态、曲线与事件时间线，并可下载原始 JSONL。</p>

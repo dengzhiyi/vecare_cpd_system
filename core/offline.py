@@ -10,7 +10,7 @@ import zlib
 import numpy as np
 
 from .channel import AcousticChannel
-from .config import CSI_FS, DetectorConfig
+from .config import CSI_FS, MRC_WEIGHT_FLOOR, DetectorConfig
 from .pipeline import SASPipeline
 from .scenarios import get_scenario
 
@@ -53,10 +53,13 @@ def evaluate_frames(frames: list[dict], scenario) -> dict:
     enter_t = target.enter_t if target else None
     exit_t = target.exit_t if target else None
 
-    presence_at = next((f["t"] for f in frames if f["state"]["presence"]), None)
+    presence_frame = next((f for f in frames if f["state"]["presence"]), None)
     alarm_frame = next((f for f in frames if f["state"]["alarm"]), None)
     apnea_frame = next((f for f in frames if f["state"]["alarm_reason"] == "APNEA"), None)
-    bpm_at = next((f["t"] for f in frames if f["state"]["bpm"] is not None), None)
+    bpm_frame = next((f for f in frames if f["state"]["bpm"] is not None), None)
+
+    presence_at = presence_frame["t"] if presence_frame else None
+    first_evidence = None if presence_frame is None else presence_frame["state"].get("first_evidence_t")
 
     false_frames = sum(
         1
@@ -73,25 +76,50 @@ def evaluate_frames(frames: list[dict], scenario) -> dict:
         float(np.mean([abs(b - g) for b, g in bpm_pairs])) if bpm_pairs else None
     )
 
+    # MRC observability: how many subcarriers actually carry the combined ACF.
+    neff = []
+    for f in frames:
+        g = np.asarray(f["features"].get("gains") or [], dtype=float)
+        if g.size == 0:
+            continue
+        w = np.maximum(g, 0.0) + MRC_WEIGHT_FLOOR
+        total = w.sum()
+        if total <= 0:
+            continue
+        w = w / total
+        neff.append(float(1.0 / np.sum(w ** 2)))
+    mrc_neff = float(np.mean(neff)) if neff else None
+
     detected = presence_at is not None and (
         enter_t is None or (exit_t is None or presence_at <= exit_t + 0.5)
     )
+
+    alarm_at = None if alarm_frame is None else alarm_frame["t"]
     metrics = {
         "detected": bool(detected) if enter_t is not None else None,
         "presence_at": presence_at,
+        "confirmed_by": None if presence_frame is None
+        else presence_frame["state"].get("breath_source"),
         "detection_latency_s": None
         if presence_at is None or enter_t is None
         else round(presence_at - enter_t, 2),
-        "breathing_at": bpm_at,
-        "alarm_at": None if alarm_frame is None else alarm_frame["t"],
+        "breathing_at": None if bpm_frame is None else bpm_frame["t"],
+        "alarm_at": alarm_at,
         "alarm_latency_s": None
-        if alarm_frame is None or enter_t is None
-        else round(alarm_frame["t"] - enter_t, 2),
+        if alarm_at is None or enter_t is None
+        else round(alarm_at - enter_t, 2),
+        # The 10 s CPD budget governs this number, not alarm_latency_s.
+        "response_time_s": None
+        if alarm_at is None or first_evidence is None
+        else round(alarm_at - first_evidence, 2),
         "alarm_reason": None if alarm_frame is None else alarm_frame["state"]["alarm_reason"],
         "apnea_escalated_at": None if apnea_frame is None else apnea_frame["t"],
         "bpm_mae": None if bpm_mae is None else round(bpm_mae, 3),
         "bpm_samples": len(bpm_pairs),
         "false_presence_frames": false_frames,
+        "motion_evidence_frames": sum(1 for f in frames if f["state"].get("motion_detected")),
+        "mrc_neff": None if mrc_neff is None else round(mrc_neff, 2),
+        "interference_frames": sum(1 for f in frames if f["features"].get("interference")),
         "frames": len(frames),
         "duration_s": frames[-1]["t"] if frames else 0.0,
     }
