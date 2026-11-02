@@ -43,7 +43,7 @@
 ```bash
 pip install numpy scipy pytest
 
-cd /workspace
+cd /workspace/vecare_cpd_system
 python3 server.py --port 8090
 ```
 
@@ -52,7 +52,7 @@ python3 server.py --port 8090
 ## 测试
 
 ```bash
-cd /workspace
+cd /workspace/vecare_cpd_system
 python3 -m pytest tests -q
 ```
 
