@@ -9,6 +9,15 @@ with a dynamic reflection from a breathing / moving infant.  The weak body
 reflection interferes with the static paths, producing the frequency-selective
 sensitivity exploited by the SAS model.  Noise bursts and cabin vibrations let
 us test false-alarm rejection.
+
+Media-source note (important when explaining validation):
+    This path synthesises ``|H(f)|`` every 20 ms from physical parameters.  It
+    never reads a WAV file, so direct simulation (Web UI and ``run_offline``)
+    needs no cabin recording at all.  WAVs are used only by the self-check that
+    exercises the audio front end; ``core.replay.render_wav`` creates them on
+    demand under ``data/selfcheck/`` (git-ignored), never shipped with the repo.
+    Real-cabin validation instead needs ``capture.wav`` recorded while
+    ``probe.wav`` is playing; :mod:`core.replay` converts that to the same CSI.
 """
 from __future__ import annotations
 

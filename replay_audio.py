@@ -12,6 +12,14 @@
 
     # 4. 存成可回放的会话，之后在 Web UI「日志回放」里看
     python replay_audio.py capture.wav --save data/sessions
+
+Media sources:
+    ``--selfcheck`` renders the seven scenarios to ``data/selfcheck/*.wav``
+    (git-ignored) and replays them; this is the only WAV the project generates
+    itself, and it is regenerated on every run.  Real validation requires a
+    ``capture.wav`` recorded at >= 48 kHz while ``probe.wav`` is looping; the
+    repo ships no real cabin recording.  Without the probe, a cabin recording
+    contains only speech/road noise and cannot yield CSI.
 """
 from __future__ import annotations
 

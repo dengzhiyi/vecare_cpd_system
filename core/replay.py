@@ -15,6 +15,15 @@ the front end is at fault, not the cabin.
 Known modelling assumption: the probe repeats every 20 ms, so the estimate
 assumes the cabin impulse response is shorter than 20 ms (6.9 m of path). A
 large gym-hall reverb would wrap around and alias; a car cabin does not.
+
+Where the "cabin recording" comes from:
+    * direct simulation (UI / run_offline) uses core.channel, no WAV at all;
+    * ``--selfcheck`` renders all seven scenarios into ``data/selfcheck/*.wav``
+      on every run (git-ignored) and feeds them back through this module;
+    * real validation needs a user-recorded ``capture.wav`` made while the
+      exported ``probe.wav`` loops in the cabin.
+    Session logs under ``data/sessions`` store CSI amplitudes and decisions --
+    they are not audio and cannot be replayed through an audio front end.
 """
 from __future__ import annotations
 

@@ -2,6 +2,12 @@
 
 Runs the acoustic channel + SAS pipeline at wall-clock pace (scaled by a speed
 multiplier), drives the CPD state machine, and writes replayable JSONL logs.
+
+The Web UI drives this path, so live monitoring is direct simulation: CSI is
+synthesised every 20 ms and no WAV/audio is involved.  The JSONL sessions keep
+CSI amplitudes plus decisions for replay; they are not audio recordings.  WAV
+input belongs to ``replay_audio.py`` / ``core.replay`` and, for the self-check,
+to the git-ignored ``data/selfcheck/`` renders.
 """
 from __future__ import annotations
 

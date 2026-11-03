@@ -189,6 +189,8 @@ footer{
   .layer{grid-template-columns:1fr;gap:12px}
   .toc{position:static}
 }
+.steps{margin:0 0 18px;padding-left:22px;color:var(--ink-2)}
+.steps li{margin-bottom:9px}
 </style>
 </head>
 <body>
@@ -202,9 +204,9 @@ footer{
     它和实录音频最终都会变成同一个 24×50 Hz 的 CSI 振幅矩阵，之后的每一行代码完全相同。
   </p>
   <div class="chips">
-    <span class="chip"><b>39</b> 项测试通过</span>
+    <span class="chip"><b>58</b> 项测试通过</span>
     <span class="chip"><b>7</b> 个验证场景</span>
-    <span class="chip">响应 <b>10.0–10.1</b> s</span>
+    <span class="chip">响应 <b>10.0</b> s</span>
     <span class="chip">CSI <b>24 × 50 Hz</b></span>
     <span class="chip">决策 <b>10 Hz</b></span>
   </div>
@@ -212,6 +214,7 @@ footer{
 
 <nav class="toc">
   <a href="#flow"><span>01</span>链路总览</a>
+  <a href="#intro"><span>A</span>仿真与录音入门</a>
   <a href="#input"><span>02</span>仿真输入</a>
   <a href="#paths"><span>03</span>三条路径</a>
   <a href="#front"><span>04</span>音频前端</a>
@@ -307,6 +310,96 @@ footer{
     <b>读法：</b>左侧绕开 WAV 的直线是「仿真直连」，用来单独检验算法；中间与右侧都要经过 <span class="mono">load_csi</span>，用来检验音频前端。
     三条路径在第 3 行汇合后共用全部下游代码。
   </figcaption>
+</section>
+
+<!-- ============ A ============ -->
+<section id="intro">
+  <div class="sec-head"><span class="num">A</span><h2>仿真与录音：给非技术读者的验证入门</h2></div>
+  <p class="sec-sub">一句话：仿真是在电脑里“造”一段座舱声音；录音是拿真实扬声器和麦克风“录”一段。两者最后喂给同一套检测算法，区别只在声音从哪来。</p>
+
+  <h3>A.1 先理解原理</h3>
+  <p>扬声器循环播放一段人耳几乎听不到的高频扫频声，麦克风同时听到“直达声 + 车内反射声”。有人呼吸或轻微移动时，反射路径会变化，接收到的“声学指纹”（CSI）随之起伏；系统从这些起伏判断：<b>有没有人、有没有呼吸、是否持续不动</b>。</p>
+
+  <h3>A.2 仿真验证：不用任何硬件</h3>
+  <p>适合先确认“算法和界面是否正常”。打开 <span class="mono">http://127.0.0.1:8090</span>，四步即可：</p>
+  <ol class="steps">
+    <li>左侧选一个场景，例如「入睡婴儿」，点「开始监测」。</li>
+    <li>把倍速调到 8×，观察状态是否从「校准中」→「检测到儿童」→「告警」，呼吸率是否接近场景真值。</li>
+    <li>看曲线、事件流、座舱示意是否同步变化；点「暂停 / 停止」或「确认静音」验证交互。</li>
+    <li>在「日志回放」里选一条示例会话，拖动进度条复盘。</li>
+  </ol>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>场景</th><th>观察重点</th></tr></thead>
+      <tbody>
+        <tr><td>空车厢</td><td>全程不报警</td></tr>
+        <tr><td>入睡婴儿</td><td>约 15 s 确认，10 s 内报警，BPM 稳定</td></tr>
+        <tr><td>活跃儿童</td><td>运动证据先触发，呼吸率仍可输出</td></tr>
+        <tr><td>呼吸暂停</td><td>先正常报警，呼吸停止约 15 s 后升级 APNEA</td></tr>
+        <tr><td>新生儿</td><td>弱反射、30 BPM 也能检出</td></tr>
+        <tr><td>噪声振动</td><td>有干扰但不误报</td></tr>
+        <tr><td>成人</td><td>14 BPM 慢呼吸可测</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>也可以用命令行批量核对：</p>
+  <div class="code">python3 replay_audio.py --selfcheck   <span class="c"># 仿真 → WAV → 再回放，验证音频前端</span>
+python3 -m pytest tests -q            <span class="c"># 58 项自动测试</span></div>
+
+  <div class="note"><b>仿真的特点：</b>完全可控、可重复、16× 加速，几分钟就能跑完几个场景；缺点是声音模型理想化，没有真实混响、扬声器失真和复杂人际干扰。</div>
+
+  <h3>A.3 录音验证：需要真实扬声器 + 麦克风</h3>
+  <p>目标不是“录一段车内声音”，而是<b>一边播放探测音、一边把声音录回来</b>。没有探测音，系统拿不到 CSI。</p>
+  <ol class="steps">
+    <li><b>准备硬件：</b>车载音响或宽频音箱（尽量覆盖 14–20 kHz）；采样率 ≥ 48 kHz、频响 ≥ 24 kHz 的麦克风；麦克风固定，不要手持。</li>
+    <li><b>生成探测音并循环播放：</b>用下面的命令生成 <span class="mono">probe.wav</span>，在车内持续播放。</li>
+    <li><b>留出干净校准期：</b>前 5 s 车内无人、完全静止，用于估计背景残差。</li>
+    <li><b>录音 40–60 s：</b>用 Audacity 或手机专业录音 App，输出 48 kHz、16-bit PCM WAV；关闭降噪、回声消除和自动增益。</li>
+    <li><b>分析并可选存档：</b>跑检测，或存成会话后到 Web UI「日志回放」查看。</li>
+  </ol>
+
+  <div class="code">python3 replay_audio.py --emit-probe probe.wav --seconds 300
+python3 replay_audio.py capture.wav
+python3 replay_audio.py capture.wav --save data/sessions</div>
+
+  <p><b>结果怎么读：</b>看首次确认时刻、告警时刻与响应时间、呼吸率、补齐/空洞、削波样本。削波必须为 0；空车厢误报多半是校准期不安静或开了 AGC。</p>
+
+  <div class="note warn"><b>伦理边界：</b>真实录音验证请用成人志愿者或呼吸模拟装置，<b>不建议用真实新生儿</b>做测试；本样机也不包含真实新生儿大规模验证。</div>
+
+  <h3>A.4 仿真需要的“座舱录音”在哪里？</h3>
+  <p>这是最容易混淆的一点：<b>直接仿真不需要任何录音文件</b>。三种媒体来源对应三种用途：</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>验证方式</th><th>声音从哪来</th><th>是否需要 WAV</th><th>是否预生成</th></tr></thead>
+      <tbody>
+        <tr><td>UI 直接仿真</td><td>程序每 20 ms 实时合成 CSI</td><td>不需要</td><td>不涉及</td></tr>
+        <tr><td><span class="mono">--selfcheck</span></td><td>七个仿真场景渲染成 WAV</td><td>需要（临时）</td><td>每次运行时生成到 <span class="mono">data/selfcheck/</span>，已忽略入库</td></tr>
+        <tr><td>真实录音</td><td>真人/模拟装置 + 真实硬件</td><td>需要</td><td>需自己录制，仓库不提供</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><span class="mono">data/sessions/</span> 里的示例会话保存的是 CSI 与决策日志（<span class="mono">frames.jsonl</span> / <span class="mono">events.jsonl</span> / <span class="mono">meta.json</span>），<b>不是录音</b>，用于回放和事后复盘。</p>
+
+  <h3>A.5 仿真和真实录音的核心区别</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>维度</th><th>仿真</th><th>真实录音</th></tr></thead>
+      <tbody>
+        <tr><td>声音来源</td><td>程序生成的多径模型</td><td>真实扬声器播放 + 真实座舱反射</td></tr>
+        <tr><td>“儿童”来源</td><td>参数化呼吸 / 动作模型</td><td>成人志愿者或呼吸模拟装置</td></tr>
+        <tr><td>干扰</td><td>预设噪声、振动突发</td><td>空调、路噪、说话、开关门、多人活动</td></tr>
+        <tr><td>可重复性</td><td>完全可重复，换种子可造差异</td><td>每次现场条件不同，难完全复现</td></tr>
+        <tr><td>速度</td><td>可 16× 加速</td><td>必须实时录，一次至少 40–60 s</td></tr>
+        <tr><td>主要用途</td><td>验证算法逻辑、UI、报警时序、回归测试</td><td>验证真实频响、混响、时钟漂移、安装位置</td></tr>
+        <tr><td>能证明什么</td><td>“逻辑是对的、参数是自洽的”</td><td>“在这套硬件和这个车里能工作”</td></tr>
+        <tr><td>不能证明什么</td><td>真实硬件上一定有效</td><td>量产可靠性、所有车型 / 所有儿童都有效</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note"><b>正确顺序：</b>先用仿真和 <span class="mono">--selfcheck</span> 把链路跑通，再做真实录音。仿真回答“算法对不对”，录音回答“换到真实世界还灵不灵”；录音通过也不等于量产通过。当前录音前端只完成过“仿真 → WAV → 回放”的闭环，尚未接真实扬声器/麦克风，这正是下一阶段要补的工作。</div>
 </section>
 
 <!-- ============ 02 ============ -->
@@ -541,7 +634,7 @@ footer{
   </div>
 
   <div class="stats">
-    <div class="stat"><b>10.0–10.1 s</b><span>响应预算自首条证据起算。若出现 16–18，说明被改回了「确认后再等 10 s」的旧口径</span></div>
+    <div class="stat"><b>10.0 s</b><span>响应预算自首条证据起算。若出现 16–18，说明被改回了「确认后再等 10 s」的旧口径</span></div>
     <div class="stat"><b>0 次误报</b><span>empty 与 stress 的 alarm_at 必须为 None。stress 有 21 帧运动证据是正常的，只是没累积到 30% 门限</span></div>
     <div class="stat"><b>68 帧</b><span>active 的运动证据。若这里是 0 或 1，说明运动通道退化成了纯呼吸兜底</span></div>
   </div>
@@ -898,7 +991,7 @@ MRC 有效子载波 19.19 / 24
     </table>
   </div>
 
-  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0–10.1 s、空场景零误报、活跃儿童运动证据 67–72 帧。代价是 BPM 精度下降 30–40%，以及 MRC 有效子载波从 21.9 降到 15.1——这是物理上限，不是实现缺陷。</p>
+  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0 s、空场景零误报、活跃儿童运动证据 67–72 帧。代价是 BPM 精度下降 30–40%，以及 MRC 有效子载波从 21.9 降到 15.1——这是物理上限，不是实现缺陷。</p>
 
   <h3 style="font-size:15px;margin:26px 0 10px">连带必须改的一处：κ 阈值要随载波数缩放</h3>
   <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。改成 <span class="mono">median + 5.5 × 稳健σ</span> 后：24 路仍是 0.115（行为不变），17 路升到 0.142，噪声峰值 0.124 被挡、真实运动最弱帧 0.185 仍通过。</p>
