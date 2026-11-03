@@ -1,14 +1,13 @@
-"""Statistical Acoustic Sensing (SAS) primitives.
+"""统计声学感知（SAS）基础原语。
 
-This module implements the signal-processing core of VeCare:
+本模块实现 VeCare 的信号处理核心：
 
-* per-subcarrier ACF of CSI amplitude after mean/linear-trend removal,
-* the motion channel: detrended residual energy + inter-subcarrier coherence,
-  plus the paper's g(f) = rho(f, 1/Fs) gain vector (Eq. 4),
-* Maximal-Ratio Combining (MRC) of subcarrier ACFs weighted by g(f) (Eq. 6),
-* prominence/height/width based breathing peak selection in 10-66 BPM,
-* the impulse-noise ("linear decrease then increase") ACF pattern detector
-  from §5 of the paper.
+* CSI 幅度去除均值/线性趋势后的逐子载波 ACF，
+* motion 通道：去趋势残差能量 + 子载波间相干性，
+  以及论文中的 g(f) = rho(f, 1/Fs) 增益向量（Eq. 4），
+* 以 g(f) 为权重对各子载波 ACF 做最大比合并（MRC）（Eq. 6），
+* 在 10-66 BPM 范围内基于突出度/高度/宽度的呼吸峰选择，
+* 论文 §5 的脉冲噪声（“先线性下降再上升”）ACF 模式检测器。
 """
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from .config import DetectorConfig, INTERFERENCE_DEPTH, MRC_WEIGHT_FLOOR
 
 
 def _detrend(X: np.ndarray) -> np.ndarray:
-    """Remove mean and linear trend along axis 0 (time)."""
+    """沿轴 0（时间方向）去除均值和线性趋势。"""
     X = np.asarray(X, dtype=np.float64)
     X = X - X.mean(axis=0, keepdims=True)
     n = X.shape[0]
@@ -35,9 +34,9 @@ def _detrend(X: np.ndarray) -> np.ndarray:
 
 
 def autocorr(X: np.ndarray, max_lag: int) -> np.ndarray:
-    """Unbiased sample ACF for each column of X.
+    """计算 X 每一列的无偏样本 ACF。
 
-    Returns shape (max_lag + 1, n_columns); lag 0 equals 1 for active columns.
+    返回形状为 (max_lag + 1, n_columns)；对活跃列而言 lag 0 处的值等于 1。
     """
     X = _detrend(X)
     n = X.shape[0]
@@ -56,20 +55,19 @@ def autocorr(X: np.ndarray, max_lag: int) -> np.ndarray:
 
 
 def motion_statistic(acf_motion: np.ndarray, lag_samples: int) -> np.ndarray:
-    """g(f): first usable ACF tap for every subcarrier (Eq. 4)."""
+    """g(f)：每个子载波第一个可用的 ACF 抽头（Eq. 4）。"""
     lag = int(np.clip(lag_samples, 1, acf_motion.shape[0] - 1))
     return acf_motion[lag, :]
 
 
 # ---------------------------------------------------------------------------
-# motion channel
+# motion 通道
 # ---------------------------------------------------------------------------
 def residual_energy(X: np.ndarray) -> float:
-    """Detrended dynamic energy of a short CSI window.
+    """短 CSI 窗去趋势后的动态能量。
 
-    Over 1 s a breathing excursion is almost a straight line, so detrending
-    removes most of it while a limb movement (a bump inside the window) leaves
-    a large residual.
+    在 1 s 内，呼吸引起的起伏几乎是一条直线，因此去趋势会去掉其中大部分；
+    而肢体运动（在窗内形成一个鼓包）会留下较大的残差。
     """
     R = _detrend(X)
     if R.size == 0:
@@ -78,11 +76,10 @@ def residual_energy(X: np.ndarray) -> float:
 
 
 def subcarrier_coherence(X: np.ndarray) -> float:
-    """Share of residual variance explained by the first singular vector.
+    """由第一奇异向量解释的残差方差占比。
 
-    A body displaces every multipath by the same delay, so the per-subcarrier
-    residuals stay correlated (kappa well above the noise floor). Ambient
-    noise bursts hit subcarriers independently and stay at the floor.
+    人体会让每条多径产生相同的时延位移，因此各子载波的残差保持相关
+    （kappa 明显高于噪声底）。环境噪声突发则会独立地作用于各子载波，保持在噪声底附近。
     """
     R = _detrend(X)
     if R.shape[0] < 4 or R.shape[1] < 2:
@@ -99,11 +96,10 @@ def subcarrier_coherence(X: np.ndarray) -> float:
 
 
 def interference_pattern(acf_mean: np.ndarray, depth: float = INTERFERENCE_DEPTH) -> bool:
-    """Impulse-noise signature from §5: the ACF decreases then increases.
+    """§5 中的脉冲噪声特征：ACF 先下降再上升。
 
-    A horn beep or door slam injects a short burst; its ACF is a triangle, i.e.
-    monotone down to a trough and monotone back up. Breathing and smooth body
-    motion do not produce that V shape within the first ~0.5 s of lag.
+    喇叭鸣笛或关门会注入一段短促的突发；其 ACF 呈三角形，即单调下降到谷底，
+    再单调回升。呼吸和平滑的身体运动不会在前约 0.5 s 的 lag 范围内产生这种 V 形。
     """
     n = min(len(acf_mean), 26)
     if n < 8:
@@ -126,12 +122,11 @@ def motion_features(
     lag_s: float,
     context: np.ndarray | None = None,
 ) -> dict:
-    """Motion channel features.
+    """motion 通道特征。
 
-    X carries the short (responsive) window used for energy and for the
-    impulse-pattern check. ``context`` optionally supplies a longer window used
-    only for the coherence estimate, which is a second-order statistic and is
-    much more stable over 2 s than over 1 s.
+    X 携带用于能量计算和脉冲模式检验的短（响应快）窗。``context`` 可选地提供
+    一个更长的窗，仅用于相干性估计，因为相干性是二阶统计量，在 2 s 上比在 1 s 上
+    稳定得多。
     """
     lag = max(1, int(round(lag_s * fs)))
     max_lag = max(lag + 2, int(round(0.5 * X.shape[0])))
@@ -149,10 +144,10 @@ def motion_features(
 
 
 # ---------------------------------------------------------------------------
-# breathing channel
+# breathing 通道
 # ---------------------------------------------------------------------------
 def combine_acf(acf: np.ndarray, weights: np.ndarray) -> np.ndarray:
-    """MRC combination of subcarrier ACFs, Eq. (6)."""
+    """对子载波 ACF 做 MRC 合并，Eq. (6)。"""
     w = np.maximum(np.asarray(weights, dtype=np.float64), 0.0) + MRC_WEIGHT_FLOOR
     total = w.sum()
     if total < 1e-9:
@@ -163,7 +158,7 @@ def combine_acf(acf: np.ndarray, weights: np.ndarray) -> np.ndarray:
 
 
 def _parabolic_peak(x: np.ndarray, idx: int) -> float:
-    """Sub-sample peak location using a 3-point parabola."""
+    """用三点抛物线拟合求亚采样精度的峰值位置。"""
     if idx <= 0 or idx >= len(x) - 1:
         return float(idx)
     y0, y1, y2 = x[idx - 1], x[idx], x[idx + 1]
@@ -174,12 +169,12 @@ def _parabolic_peak(x: np.ndarray, idx: int) -> float:
 
 
 def _descend_to_fundamental(idx: np.ndarray, heights: np.ndarray, depth: int = 4) -> int:
-    """Pick the fundamental peak, not its harmonic.
+    """选取基频峰，而不是它的谐波。
 
-    A periodic signal peaks at tau_b, 2*tau_b, 3*tau_b with nearly equal
-    height, so "the strongest peak" can be any of them and "the earliest peak"
-    can be a slow sway unrelated to breathing. Walk down instead: if a
-    comparable peak exists near lag/2, the current one is a harmonic.
+    周期信号会在 tau_b, 2*tau_b, 3*tau_b 处出现高度几乎相等的峰，因此
+    “最强的峰”可能是其中任意一个，而“最早的峰”可能是与呼吸无关的缓慢摆动。
+    换一种做法：向下查找，如果在 lag/2 附近存在一个强度相当的峰，就说明当前峰
+    是谐波。
     """
     best = int(np.argmax(heights))
     for _ in range(depth):
@@ -206,12 +201,11 @@ def find_breathing_peak(
     cfg: DetectorConfig,
     window_samples: int | None = None,
 ) -> dict:
-    """Select a plausible breathing peak from the combined ACF.
+    """从合并后的 ACF 中选出一个可信的呼吸峰。
 
-    Peaks are *searched* only inside the 10-66 BPM lag range, but prominence and
-    height are measured on the full ACF starting at lag 1. Slicing the array at
-    lag_min first would truncate the first peak's left trough and make its
-    prominence half of a harmonic's, which silently doubles the reported rate.
+    峰只在 10-66 BPM 的 lag 区间内*搜索*，但突出度和高度是在从 lag 1 开始的
+    完整 ACF 上度量的。如果一开始就在 lag_min 处对数组切片，会截断第一个峰的
+    左侧谷底，使它的突出度只有谐波的一半，从而在无声无息中把报告的呼吸率翻倍。
     """
     lag_min = int(round(cfg.breath_lag_min_s * fs))
     nwin = window_samples if window_samples is not None else len(combined)
@@ -248,12 +242,11 @@ def find_breathing_peak(
                 "prominence": 0.0}
 
     best = int(np.argmax(heights * (0.5 + proms)))
-    # Prefer the earliest plausible (fundamental) peak whose strength is close
-    # to the strongest one; harmonics of breathing appear at 2x/3x cycle.
-    # A periodic signal peaks at tau_b, 2*tau_b, 3*tau_b with nearly equal
-    # height; the fundamental is the earliest one. Prominence must NOT be used
-    # as a relative gate here: an interior harmonic always spans a full trough
-    # while the first peak only spans half of one.
+    # 优先选择最早且强度接近最强峰的可信（基频）峰；呼吸的谐波出现在
+    # 2 倍/3 倍周期处。
+    # 周期信号会在 tau_b, 2*tau_b, 3*tau_b 处出现高度几乎相等的峰，基频就是
+    # 最早的那个。这里绝不能把突出度当作相对门限：内部谐波总是跨越完整的谷底，
+    # 而第一个峰只跨越半个谷底。
     keep = [i for i in range(len(idx)) if heights[i] >= heights[best] * 0.85]
     chosen = keep[0] if keep else best
 
@@ -264,8 +257,8 @@ def find_breathing_peak(
     prominence = float(proms[chosen])
 
     conf = 0.55 * min(1.0, height / 0.35) + 0.45 * min(1.0, prominence / 0.25)
-    # A real breathing cycle is distributed over adjacent lags rather than a
-    # single noisy spike, so give broad peaks a small bonus.
+    # 真实的呼吸周期分布在相邻的几个 lag 上，而不是单个带噪的尖峰，
+    # 因此给较宽的峰一点小幅加成。
     conf += 0.06 * min(1.0, float(widths[chosen]) / (0.5 * fs))
     conf = float(np.clip(conf, 0.0, 1.0))
 
@@ -287,11 +280,11 @@ def compute_features(
     cfg: DetectorConfig,
     fs: int = 50,
 ) -> dict:
-    """Compute SAS features from sliding CSI amplitude windows.
+    """由滑动 CSI 幅度窗计算 SAS 特征。
 
-    amp_motion: (N_m, S) amplitudes for the motion window (e.g. 1 s).
-    amp_breath: (N_b, S) amplitudes for the breathing window (e.g. 8 s); the
-    trailing part of it doubles as the coherence context window.
+    amp_motion：motion 窗（例如 1 s）的 (N_m, S) 幅度。
+    amp_breath：breathing 窗（例如 8 s）的 (N_b, S) 幅度；其尾部同时充当
+    相干性上下文窗。
     """
     coh_n = int(round(cfg.motion_coherence_window_s * fs))
     context = amp_breath[-coh_n:] if amp_breath.shape[0] >= coh_n else amp_breath
@@ -315,8 +308,8 @@ def compute_features(
         int(round(cfg.breath_window_s * fs)) - 2,
     )
     acf_b = autocorr(amp_breath, max_lag_b)
-    # MRC weights are the subcarriers' own gains over the breathing window
-    # (Eq. 4 on the raw amplitude), i.e. how much target energy each one sees.
+    # MRC 权重是在呼吸窗上由各子载波自身增益得到的（Eq. 4 作用于原始幅度），
+    # 即每个子载波能看到多少目标能量。
     weights = np.maximum(motion_statistic(acf_b, max(1, int(round(cfg.motion_lag_s * fs)))), 0.0)
     combined = combine_acf(acf_b, weights)
 

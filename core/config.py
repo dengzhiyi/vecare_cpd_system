@@ -1,60 +1,55 @@
-"""VeCare prototype configuration.
+"""VeCare 原型配置。
 
-Values follow the SAS / VeCare pipeline described in the NSDI'23 paper.
-The prototype uses a simulated acoustic front-end (one cabin speaker + one
-microphone) at a 48 kHz sound sampling rate, compressed into 50 Hz CSI frames.
+各项取值遵循 NSDI'23 论文中描述的 SAS / VeCare 处理链路。
+该原型使用模拟声学前端（一个座舱扬声器 + 一个麦克风），声采样率为 48 kHz，
+并压缩为 50 Hz 的 CSI 帧。
 
-Two channels share the same CSI but measure different things:
+两个通道共享同一 CSI，但测量的是不同的物理量：
 
-* motion  -- 1 s window (paper §4.3 "e.g., 1s"), raw amplitude, no high-pass.
-  The decision statistic is the detrended residual energy normalised by the
-  calibrated background, gated by inter-subcarrier coherence so that
-  uncorrelated ambient noise bursts cannot masquerade as a moving body.
-* breathing -- 8 s window, per-subcarrier ACF combined by MRC with weights
-  g(f) = rho(f, 1/Fs), as in Eq. (4) and Eq. (6).
+* motion —— 1 s 窗（论文 §4.3 “e.g., 1s”），使用原始幅度，不做高通滤波。
+  判决统计量为去趋势后的残差能量，用校准得到的背景电平做归一化，
+  并由子载波间相干性进行门控，使不相关的环境噪声突发无法伪装成一个运动的人体。
+* breathing —— 8 s 窗，逐子载波 ACF 按权重 g(f) = rho(f, 1/Fs) 经 MRC 合并，
+  与 Eq. (4) 和 Eq. (6) 一致。
 """
 from dataclasses import dataclass, asdict
 
-SOUND_SPEED = 343.0          # m/s, in-cabin air
-AUDIO_FS = 48000             # Hz, commodity audio sampling rate
-CSI_FS = 50                  # Hz, channel sounding rate (Kasami period = 20 ms)
-DECISION_FS = 10             # Hz, CPD decision rate
-N_SUBCARRIERS = 24           # ceiling, not a promise: narrow bands get fewer
-# The low edge is fixed, not planned: every driver we care about is specified as
-# a 10 kHz high-pass, so 10.5 kHz -- the paper's own lower edge -- is already
-# 500 Hz of guard into the high-pass corner and stays put for every hardware
-# ceiling. Only the top of the band tracks the hardware. If a future device
-# raises its high-pass too, this constant is the one thing that has to change.
-F_LOW = 10_500               # Hz, 10 kHz high-pass + 500 Hz guard, never planned
-F_HIGH = 23_500              # Hz, design ceiling when the hardware allows it
+SOUND_SPEED = 343.0          # m/s，舱内空气声速
+AUDIO_FS = 48000             # Hz，通用音频采样率
+CSI_FS = 50                  # Hz，信道探测速率（Kasami 周期 = 20 ms）
+DECISION_FS = 10             # Hz，CPD 判决速率
+N_SUBCARRIERS = 24           # 上限，并非承诺值：窄带会用更少的子载波
+# 低端边界是固定的，不参与规划：我们关心的每个驱动器都标定为 10 kHz 高通，
+# 因此 10.5 kHz —— 论文自己的下边界 —— 距离高通拐点已有 500 Hz 的保护带，
+# 并且对任何硬件上限都保持不变。只有频带的上边界跟随硬件变化。如果将来某个设备
+# 也提高了它的高通频率，那么需要修改的就只有这一个常量。
+F_LOW = 10_500               # Hz，10 kHz 高通 + 500 Hz 保护带，从不参与规划
+F_HIGH = 23_500              # Hz，硬件允许时的设计上限
 
-# The probe sweeps deliberately wider than the carrier band, so the raised-cosine
-# edges (which necessarily lose energy) sit outside it. With the sweep starting
-# and ending at the carrier band itself, the two extreme carriers got -23 dB of
-# probe power, i.e. 200x more noise than the others.
+# 探测信号刻意扫得比载波频带更宽，好让升余弦边缘（它必然损失能量）落在频带之外。
+# 如果扫频的起点和终点正好落在载波频带上，最外侧的两个载波只能获得 -23 dB 的
+# 探测功率，也就是比其余载波的噪声大 200 倍。
 SWEEP_LO = 9_800             # Hz
-SWEEP_HI = 23_900            # Hz, must stay below Nyquist for fs = 48 kHz
-PROBE_TAPER_S = 0.0006       # 0.6 ms; 2 ms edges cost 23 dB at the band ends
+SWEEP_HI = 23_900            # Hz，对 fs = 48 kHz 必须保持在 Nyquist 频率以下
+PROBE_TAPER_S = 0.0006       # 0.6 ms；2 ms 的边缘会在频带两端损失 23 dB
 
-# --- hardware band ----------------------------------------------------------
-# Speaker and microphone response is never flat to 23.5 kHz. A driver spec of
-# "18 kHz" means -3 dB there and a steep rolloff above it, and a carrier that
-# sits on that rolloff has almost no probe power: the spectral-division
-# estimate degrades into noise/noise. Those carriers do not merely lose
-# accuracy, they inject a wideband random amplitude sequence that the residual
-# energy and the MRC weights cannot tell apart from a moving body -- measured
-# on an empty cabin, they fired a false presence at 17.6 s.
+# --- 硬件带宽 ----------------------------------------------------------------
+# 扬声器和麦克风的频响从来不会平坦到 23.5 kHz。驱动器标称的 “18 kHz” 意味着
+# 在该处已是 -3 dB，再往上则是陡峭的滚降，而落在滚降上的载波几乎没有探测功率：
+# 谱除法估计会退化成噪声除以噪声。那些载波不只是损失精度，它们还会注入一段
+# 宽带随机幅度序列，残差能量和 MRC 权重都无法把它与运动的人体区分开 ——
+# 在空车厢上实测，它们曾在 17.6 s 触发一次虚假的存在判定。
 #
-# So the band has to be planned from the hardware, not from the paper:
-HW_F_MAX = None              # measured -3 dB ceiling; None = assume F_HIGH
-HW_GUARD_HZ = 1_500          # keep carriers this far below the hardware ceiling
-CARRIER_MIN_SPACING_HZ = 250  # frequency-diversity floor, see plan_band docstring
-SWEEP_MARGIN_HZ = 700        # sweep overhang past the carrier band on each side
+# 因此频带必须依据硬件来规划，而不能依据论文：
+HW_F_MAX = None              # 实测的 -3 dB 上限；None = 假定为 F_HIGH
+HW_GUARD_HZ = 1_500          # 让载波比硬件上限低这么多
+CARRIER_MIN_SPACING_HZ = 250  # 频率分集下限，见 plan_band 的 docstring
+SWEEP_MARGIN_HZ = 700        # 扫频在载波频带两侧各外延的量
 
 
 @dataclass(frozen=True)
 class AcousticBand:
-    """A carrier set plus the sweep that excites it, for one hardware ceiling."""
+    """某一硬件上限下的一组载波，以及激励它们的扫频信号。"""
     f_lo: float
     f_hi: float
     n_carriers: int
@@ -72,11 +67,10 @@ class AcousticBand:
 
     @property
     def diversity(self) -> float:
-        """``spacing x longest path delay``: fringes rotated between neighbours.
+        """``spacing x longest path delay``：相邻载波之间旋转的干涉条纹数。
 
-        Below ~1 the neighbouring carriers see nearly the same phase and stop
-        being independent observations, which costs MRC diversity and makes the
-        inter-subcarrier coherence test optimistic.
+        当该值低于约 1 时，相邻载波看到的相位几乎相同，不再算作相互独立的观测，
+        这会损失 MRC 分集增益，并使子载波间相干性检验变得过于乐观。
         """
         return self.spacing_hz * 9.2e-3
 
@@ -89,41 +83,37 @@ class AcousticBand:
 
 
 def plan_band(hw_f_max: float | None = None) -> AcousticBand:
-    """Derive the carrier set from the hardware's usable bandwidth.
+    """根据硬件可用带宽推导载波集合。
 
-    Three constraints fight each other when the top of the band disappears:
+    当频带上边界消失时，有三个相互制约的约束：
 
-    1. **Stay below the rolloff.** Carriers within ``HW_GUARD_HZ`` of the
-       hardware ceiling lose probe power and turn into noise meters.
-    2. **Keep enough spacing.** Frequency diversity needs
-       ``spacing x delay_spread >~ 1``; with a 9.2 ms cabin spread that is
-       roughly 110 Hz, and 250 Hz leaves a comfortable margin.
-    3. **Keep enough carriers.** MRC combines them, and the coherence test
-       needs a population to estimate a rank-1 share from.
+    1. **保持在滚降之下。** 距离硬件上限 ``HW_GUARD_HZ`` 以内的载波会损失探测
+       功率，变成“噪声计”。
+    2. **保持足够的间距。** 频率分集需要
+       ``spacing x delay_spread >~ 1``；舱内时延扩展为 9.2 ms 时，该值约为
+       110 Hz，而 250 Hz 留出了舒适的余量。
+    3. **保持足够的载波数。** MRC 要将它们合并，而相干性检验也需要一定的样本
+       数量来估计秩 1 分量所占的比例。
 
-    With 18 kHz you can still hold 24 carriers (6 kHz span at 261 Hz). With
-    16 kHz the span is 4 kHz, so the count drops to 17 at 250 Hz -- trading
-    diversity order for spacing is the right side of that trade, because 17
-    carriers still average down the noise while 24 carriers at 174 Hz would
-    start sharing fringes.
+    在 18 kHz 上限下仍可容纳 24 个载波（6 kHz 跨度、261 Hz 间距）。在
+    16 kHz 上限下跨度只有 4 kHz，因此按 250 Hz 间距载波数降到 17 个 ——
+    用分集阶数换间距是这笔交易中正确的一边，因为 17 个载波仍能对噪声取平均，
+    而 24 个载波按 174 Hz 间距会开始共享干涉条纹。
 
-    ``hw_f_max=None`` means "no measured limit": the design band is used as-is,
-    with no guard, because there is no rolloff to stay away from.
+    ``hw_f_max=None`` 表示“没有实测限制”：直接使用设计频带，不设保护带，
+    因为没有滚降需要避让。
 
-    Only the **top** of the band is planned; ``f_lo`` is always ``F_LOW``. A
-    10 kHz high-pass corner is already covered by the 500 Hz between it and
-    ``F_LOW``, so lowering the ceiling shrinks the band from above and never
-    moves the low edge. Keeping the low edge fixed matters for more than
-    tidiness: the breathing channel's per-carrier ACF gains are calibrated
-    against a fixed noise floor, and sliding the lower carriers would change
-    which physical paths the band averages over between two runs.
+    只有频带的**上边界**参与规划；``f_lo`` 始终等于 ``F_LOW``。10 kHz 高通
+    拐点与 ``F_LOW`` 之间的 500 Hz 已经覆盖了它，因此降低上限只会从上方收缩
+    频带，绝不会移动低端边界。保持低端固定不只是为了整洁：呼吸通道的逐载波
+    ACF 增益是针对固定噪声底标定的，若滑动较低的载波，两次运行之间频带所平均
+    的物理路径就会改变。
 
-    Measured: widening the band back by shrinking the guard buys nothing. At a
-    16 kHz ceiling, guards of 1500 / 800 / 400 Hz gave sleeping-scenario BPM
-    MAE of 0.249 / 0.268 / 0.290 and motion-evidence frames of 0 / 1 / 2 --
-    more carriers, slightly worse BPM, and the first still-cabin motion
-    misfires. The residual limit is the coherence time of the breathing signal,
-    not the carrier count, so the conservative guard stays.
+    实测：通过缩小保护带来反向拓宽频带并没有收益。在 16 kHz 上限下，
+    1500 / 800 / 400 Hz 的保护带对应的入睡场景 BPM MAE 分别为
+    0.249 / 0.268 / 0.290，运动证据帧数分别为 0 / 1 / 2 ——
+    载波更多，BPM 反而略差，且第一种仍会在静止车厢里误触发运动。真正的限制
+    是呼吸信号的相干时间，而不是载波数量，所以保守的保护带保留不变。
     """
     if hw_f_max:
         f_hi = min(float(F_HIGH), float(hw_f_max) - HW_GUARD_HZ)
@@ -149,34 +139,34 @@ def plan_band(hw_f_max: float | None = None) -> AcousticBand:
         hw_f_max=ceiling,
     )
 
-# --- motion channel ---------------------------------------------------------
-MOTION_WINDOW_S = 1.0        # paper §4.3: short window for responsiveness
-MOTION_LAG_S = 1.0 / CSI_FS  # Eq. (4): g(f) = rho(f, tau = 1/Fs) = 20 ms
-MOTION_COHERENCE_WINDOW_S = 2.0  # longer window stabilises the coherence estimate
-MOTION_ENERGY_RATIO = 1.60   # residual energy / calibrated background
-MOTION_COHERENCE_MIN = 0.115  # first-singular-value share across subcarriers
-MOTION_RATIO_FLOOR = 1.25    # floor applied at sensitivity = 1.0
+# --- motion 通道 ------------------------------------------------------------
+MOTION_WINDOW_S = 1.0        # 论文 §4.3：短窗以保证响应速度
+MOTION_LAG_S = 1.0 / CSI_FS  # Eq. (4)：g(f) = rho(f, tau = 1/Fs) = 20 ms
+MOTION_COHERENCE_WINDOW_S = 2.0  # 更长的窗可稳定相干性的估计
+MOTION_ENERGY_RATIO = 1.60   # 残差能量 / 校准得到的背景电平
+MOTION_COHERENCE_MIN = 0.115  # 跨子载波的第一奇异值占比
+MOTION_RATIO_FLOOR = 1.25    # 灵敏度 = 1.0 时施加的下限
 
-# --- breathing channel ------------------------------------------------------
+# --- breathing 通道 ---------------------------------------------------------
 BREATH_WINDOW_S = 8.0
-BREATH_LAG_MIN_S = 0.80      # 75 BPM, headroom above the newborn band
+BREATH_LAG_MIN_S = 0.80      # 75 BPM，比新生儿呼吸率区间再留出余量
 BREATH_LAG_MAX_S = 6.00      # 10 BPM
-BREATH_MAX_OVERLAP = 0.75    # unbiased ACF dies below ~25 % overlap
+BREATH_MAX_OVERLAP = 0.75    # 重叠低于约 25 % 时无偏 ACF 会失效
 BREATH_MIN_HEIGHT = 0.10
 BREATH_MIN_PROMINENCE = 0.05
 BREATH_CONF_THRESHOLD = 0.50
 
-# --- decision ---------------------------------------------------------------
+# --- 判决 ------------------------------------------------------------------
 EVIDENCE_WINDOW_S = 5.0
 PRESENCE_RATIO = 0.30
-RESPONSE_BUDGET_S = 10.0     # total CPD response budget, counted from the
-                             # first evidence sample (not from confirmation)
+RESPONSE_BUDGET_S = 10.0     # CPD 总响应预算，从首个证据样本起算
+                             # （而不是从确认时刻起算）
 APNEA_TIMEOUT_S = 15.0
 CLEAR_TIMEOUT_S = 25.0
 CALIBRATION_S = 5.0
-EVIDENCE_GAP_RESET_S = 5.0   # a new evidence episode restarts the budget
-MRC_WEIGHT_FLOOR = 0.02      # keeps zero/negative gains from killing a subcarrier
-INTERFERENCE_DEPTH = 0.35    # V-shaped ACF depth for impulse-noise rejection
+EVIDENCE_GAP_RESET_S = 5.0   # 新的一段证据会重新开始计算预算
+MRC_WEIGHT_FLOOR = 0.02      # 防止零/负增益让某个子载波失效
+INTERFERENCE_DEPTH = 0.35    # 用于抑制脉冲噪声的 V 形 ACF 深度
 
 
 @dataclass
@@ -203,7 +193,7 @@ class DetectorConfig:
     sensitivity: float = 1.0
 
     def motion_ratio_floor(self) -> float:
-        # sensitivity > 1 raises sensitivity (lowers the ratio threshold)
+        # sensitivity > 1 会提高灵敏度（即降低比值阈值）
         return max(MOTION_RATIO_FLOOR - 0.1, self.motion_energy_ratio / max(0.3, self.sensitivity))
 
     def to_dict(self) -> dict:

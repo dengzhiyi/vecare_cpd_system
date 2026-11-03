@@ -50,6 +50,15 @@
   <main class="layout">
     <aside class="sidebar">
 
+      <!--
+        实时仿真入口：浏览器不做声学计算。
+        点击“开始监测”后 app.js 调用 POST /api/live/start，请求体包含
+        scenario（场景键）、sensitivity（灵敏度）、speed（倍速）、
+        hw_f_max（频响上限）；后端 SimulationEngine 线程按 50 Hz 合成 CSI。
+        运行期间每 320 ms 调 GET /api/live?since=&session= 增量拉取决策帧。
+        暂停 / 改倍速 / 停止分别调用 /api/live/pause、/api/live/speed、
+        /api/live/stop；告警确认调用 /api/live/ack。
+      -->
       <section class="card control-card" id="liveControls">
         <div class="card-head">
           <h2>仿真场景</h2>
@@ -90,6 +99,12 @@
         <div class="session-line">运行频带 · <span id="bandRun" class="mono">—</span></div>
       </section>
 
+      <!--
+        日志回放：GET /api/sessions 列出 data/sessions 下的会话；
+        GET /api/sessions/<id> 取回 frames.jsonl、events.jsonl、meta.json；
+        GET /api/sessions/<id>/download/<file> 导出原始 JSONL。
+        回放由浏览器按时间轴重放已保存的 CSI 与决策帧，不重新做仿真。
+      -->
       <section class="card control-card hidden" id="replayControls">
         <div class="card-head">
           <h2>历史会话</h2>

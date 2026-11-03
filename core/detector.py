@@ -1,23 +1,17 @@
-"""Child-presence detection state machine and alarm logic.
+"""儿童存在检测状态机与告警逻辑。
 
-Motion and breathing evidence are aggregated over a 5 s decision window; a
-child is claimed when evidence occupies more than 30 % of that window, as in
-the paper. The response budget (10 s by default) is counted from the *first
-evidence sample*, not from the moment presence is confirmed: detection latency
-and the confirmation delay share the same budget, so the end-to-end response
-cannot silently drift past the regulatory figure.
+运动证据和呼吸证据在 5 s 的判决窗内聚合；当证据占据该窗 30 % 以上时，即判定
+车内有儿童，与论文一致。响应预算（默认 10 s）从*首个证据样本*起算，
+而不是从确认存在的那一刻起算：检测延迟和确认延迟共用同一预算，因此端到端
+响应时间不会在无人察觉的情况下超出法规规定的数值。
 
-Motion is decided by two numbers from the 1 s window:
+运动由 1 s 窗内的两个数值来判定：
 
-* ``ratio``     -- detrended residual energy divided by the calibrated
-                   background level. Detrending over 1 s removes most of a
-                   breathing excursion while a limb movement leaves a large
-                   residual.
-* ``coherence`` -- share of residual variance explained by the first singular
-                   vector across subcarriers. A body pushes every multipath by
-                   the same delay, so the residuals stay correlated; ambient
-                   noise bursts hit subcarrier independently and stay at the
-                   background level.
+* ``ratio``     —— 去趋势后的残差能量除以校准得到的背景电平。在 1 s 上
+                   去趋势会去掉呼吸起伏的大部分，而肢体运动则会留下很大的残差。
+* ``coherence`` —— 跨子载波由第一奇异向量解释的残差方差占比。人体会让
+                   每条多径产生相同的时延位移，因此残差保持相关；环境噪声突发
+                   独立地作用于各子载波，维持在背景电平附近。
 """
 from __future__ import annotations
 
@@ -52,7 +46,7 @@ class CPDDetector:
         self.motion_detected = False
         self.interference = False
 
-        self.evidence = deque()          # (t, bool)
+        self.evidence = deque()          # (时间, 布尔值)
         self.presence = False
         self.presence_since: float | None = None
         self.presence_score = 0.0
@@ -100,21 +94,17 @@ class CPDDetector:
             vals = np.asarray(self.calib_values, dtype=float)
             med = float(np.median(vals))
             mad = float(np.median(np.abs(vals - med))) * 1.4826
-            # Background level plus a small guard band so a calm cabin sits
-            # comfortably below ratio = 1.
+            # 背景电平加上一个小的保护带，使安静的车厢舒适地落在 ratio = 1 以下。
             self.baseline_energy = max(med + 0.5 * mad, 1e-6)
-            # The coherence gate has to scale with the carrier count, not sit on
-            # a fixed offset from the quiet-window median. A rank-1 energy share
-            # estimated from N carriers has a null expectation near 1/N and a
-            # spread that grows as N shrinks, so a fixed +0.015 keeps almost no
-            # margin once the band narrows: measured at 17 carriers the
-            # quiet-window median was 0.113 (versus 0.087 at 24), putting a
-            # +0.015 threshold at 0.128 against a sustained-noise peak of 0.129
-            # -- a door slam confirmed as a child. Median + 5.5 robust sigma
-            # tracks the spread instead: it still lands on 0.115 at 24 carriers
-            # (absolute floor unchanged) and rises to 0.142 at 17, which clears
-            # the noise peak (0.124) while the weakest real-motion frames
-            # (0.185) stay well above it.
+            # 相干性门限必须随载波数量缩放，而不能固定在安静窗中位数之上的
+            # 某个常量偏移。由 N 个载波估计出的秩 1 能量占比，其零假设期望约为
+            # 1/N，且离散程度随 N 减小而增大，因此一旦频带收窄，固定的 +0.015
+            # 几乎留不下余量：实测在 17 个载波时，安静窗中位数为 0.113
+            #（24 个载波时为 0.087），+0.015 的门限为 0.128，而持续噪声的峰值
+            # 为 0.129 —— 一次关门被确认为儿童。中位数 + 5.5 倍稳健 sigma 则能
+            # 跟随离散程度：在 24 个载波时它仍落在 0.115（绝对下限不变），
+            # 在 17 个载波时升到 0.142，既高于噪声峰值（0.124），而最弱的真实
+            # 运动帧（0.185）仍远高于它。
             coh_vals = np.asarray(self.calib_coherence, dtype=float)
             coh = float(np.median(coh_vals))
             coh_mad = float(np.median(np.abs(coh_vals - coh))) * 1.4826
@@ -127,11 +117,10 @@ class CPDDetector:
             self._set_state(t, "MONITORING", "背景校准完成")
 
     def _breath_lag_is_stable(self, breath: dict) -> bool:
-        """Does this breathing peak agree with the recent ones?
+        """这个呼吸峰与最近的几个峰一致吗？
 
-        Used only when the motion channel is flagged, to tell "the body really is
-        moving, but it is also still breathing" (a stable periodic peak) apart
-        from "the ACF is being bent by motion" (a wandering peak).
+        仅在 motion 通道被标记时使用，用于区分“身体确实在动，但仍在呼吸”
+        （稳定的周期峰）和“ACF 正被运动扭曲”（漂移的峰）。
         """
         lag = breath.get("lag_s")
         if not lag or not breath.get("valid"):
@@ -164,16 +153,13 @@ class CPDDetector:
             and coherence >= self.coherence_threshold
         )
 
-        # Only look for breathing when the body is still (paper §4.3) -- with one
-        # exception. "Still" is inferred from the motion channel, and the motion
-        # channel measures coherent dynamics *relative to the noise floor*. In a
-        # quiet cabin the chest's own residual (a 1 s linear detrend does not
-        # remove the curvature of an 18 BPM excursion) is by itself several times
-        # the floor, so the motion flag latches on and the breathing channel is
-        # muted forever -- the quieter the recording, the less breathing you get.
-        # A limb bump, unlike breathing, does not leave a stable periodic ACF
-        # peak, so while motion is flagged the breathing peak is accepted only
-        # if its lag agrees with the last few estimates.
+        # 只有在身体静止时才去寻找呼吸（论文 §4.3）—— 但有一个例外。
+        # “静止”是由 motion 通道推断的，而 motion 通道度量的是*相对于噪声底*
+        # 的相干动态。在安静车厢里，胸腔自身的残差（1 s 线性去趋势无法去除
+        # 18 BPM 起伏的曲率）本身就已是噪声底的好几倍，于是运动标志一直置位，
+        # 呼吸通道被永久静音 —— 录音越安静，反而越测不到呼吸。
+        # 肢体碰撞与呼吸不同，不会留下稳定的周期性 ACF 峰，因此在运动被标记期间，
+        # 只有当呼吸峰的 lag 与最近几次估计一致时才接受它。
         allow_breath = not motion_det or self._breath_lag_is_stable(breath)
         peak_valid = bool(
             allow_breath
@@ -183,8 +169,8 @@ class CPDDetector:
         bpm = breath.get("bpm") if peak_valid else None
         conf = float(breath.get("confidence", 0.0)) if peak_valid else 0.0
 
-        # Track plausible lags even while motion mutes the output: the history is
-        # what makes the stability test above possible at all.
+        # 即使运动导致输出被静音，也要记录可信的 lag：正是这段历史让上面的
+        # 稳定性检验成为可能。
         if (
             breath.get("valid")
             and breath.get("confidence", 0) >= self.cfg.breath_conf_threshold
@@ -208,7 +194,7 @@ class CPDDetector:
         self.breath_confidence = conf
 
         evidence = motion_det or breath_det
-        # Impulse interference voids the frame entirely (paper §5).
+        # 脉冲干扰会整帧作废（论文 §5）。
         if self.interference:
             evidence = False
 
@@ -223,7 +209,7 @@ class CPDDetector:
         if motion_det:
             self.last_motion_t = t
         if evidence:
-            # A fresh episode restarts the response budget.
+            # 新的一段证据会重新开始计算响应预算。
             if (
                 self.last_evidence_t is None
                 or t - self.last_evidence_t > self.cfg.evidence_gap_reset_s
@@ -240,10 +226,9 @@ class CPDDetector:
                 "检测到车内儿童（%s证据持续）" % ("运动" if motion_det else "呼吸")
             )
 
-        # Presence latch release: after a long evidence-free period. An
-        # unacknowledged alarm stays latched until the operator responds;
-        # once acknowledged, silence means the child has left, so the alarm
-        # and the presence latch are both cleared and monitoring resumes.
+        # 存在锁存的解除：在长时间没有证据之后。未被确认的告警会一直保持锁存，
+        # 直到操作员做出响应；一旦被确认，静默即意味着儿童已经离开，此时告警
+        # 和存在锁存都会被清除，并恢复监测。
         if (
             self.presence
             and (not self.alarm or self.acknowledged)
@@ -267,8 +252,8 @@ class CPDDetector:
             self.countdown = self.cfg.response_budget_s
             self._event(t, "cleared", "连续无存在证据，恢复安全状态")
 
-        # Apnea alarm: confirmed breathing presence, then breathing stops while
-        # the infant is still and no motion evidence is available.
+        # 呼吸暂停告警：已确认存在呼吸，随后呼吸停止，而婴儿保持静止且
+        # 没有可用的运动证据。
         apnea = (
             self.presence
             and self.breathing_ever
@@ -285,13 +270,11 @@ class CPDDetector:
             if apnea:
                 self._raise_alarm(t, "APNEA", "检测到儿童呼吸停止，触发呼吸异常告警")
             elif self.countdown <= 1e-6:
-                # Floating-point accumulation across 50 Hz frames can leave the
-                # last frame a few ulps short of the budget; without the guard
-                # a 10.0 s budget fires one decision frame late (10.1 s).
+                # 50 Hz 逐帧累积浮点误差可能让最后一帧距离预算还差几个 ulp；
+                # 没有这个保护，10.0 s 的预算会晚一个判决帧触发（10.1 s）。
                 self._raise_alarm(t, "PRESENCE", "儿童被留在车内，触发儿童存在告警")
         elif self.alarm and apnea and self.alarm_reason != "APNEA":
-            # Already alarming for presence: escalate the reason if breathing
-            # subsequently stops (critical condition).
+            # 已经在为存在告警：如果随后呼吸停止（危急情况），则升级告警原因。
             self.alarm_reason = "APNEA"
             self.alarm_since = t
             self.acknowledged = False

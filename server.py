@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""VeCare CPD prototype HTTP server (Python standard library only).
+"""VeCare CPD 原型 HTTP 服务器（仅使用 Python 标准库）。
 
-Serves the dashboard plus a small JSON API:
+提供仪表盘以及一个小型 JSON API：
 
-  GET  /api/scenarios                 preset cabin scenarios + model parameters
-  GET  /api/status                    current engine / detector status
-  GET  /api/live?since=N               incremental live frames + events
+  GET  /api/scenarios                 预置座舱场景 + 模型参数
+  GET  /api/status                    当前引擎 / 检测器状态
+  GET  /api/live?since=N              增量实时帧 + 事件
   POST /api/live/start                {scenario, sensitivity, speed, seed?, hw_f_max?}
   POST /api/live/pause                {paused}
   POST /api/live/speed                {speed}
-  POST /api/live/ack                  acknowledge / mute the alarm
-  POST /api/live/stop                 stop and finalize the session
-  GET  /api/sessions                  recorded sessions
-  GET  /api/sessions/<id>             replay data (meta + frames + events)
-  GET  /api/sessions/<id>/download/<f> download JSONL / meta
+  POST /api/live/ack                  确认 / 静音告警
+  POST /api/live/stop                 停止并收尾会话
+  GET  /api/sessions                  已记录的会话
+  GET  /api/sessions/<id>             回放数据（meta + frames + events）
+  GET  /api/sessions/<id>/download/<f> 下载 JSONL / meta
 """
 from __future__ import annotations
 
@@ -50,15 +50,14 @@ ENGINE = SimulationEngine(BASE_DIR / "data" / "sessions")
 
 STATIC_FILES = {"index.html", "styles.css", "app.js"}
 
-# Hardware ceilings the UI may offer. None is the paper's own band; the rest are
-# the driver specs we actually meet (see README, "硬件带宽受限"). plan_band
-# rejects ceilings that leave fewer than four carriers (below ~12.75 kHz), and
-# the API deliberately exposes only this tested set.
+# UI 可以提供的硬件上限。None 表示论文自身的频带；其余为我们实际遇到的驱动
+# 规格（见 README 的“硬件带宽受限”）。plan_band 会拒绝载波少于四个的上限
+#（低于约 12.75 kHz），因此 API 刻意只暴露这组经过测试的取值。
 BAND_CHOICES = (None, 20_000, 18_000, 16_000, 14_000)
 
 
 def band_options() -> list[dict]:
-    """Everything the UI needs to render one bandwidth chip, precomputed."""
+    """UI 渲染一个带宽选项所需的一切，均已预先算好。"""
     out = []
     for hw in BAND_CHOICES:
         band = plan_band(hw)
@@ -82,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     # ------------------------------------------------------------------
-    def log_message(self, fmt, *args):  # keep the console quiet during demos
+    def log_message(self, fmt, *args):  # 演示时保持控制台安静
         if getattr(self.server, "verbose", False):
             sys.stderr.write("[http] " + fmt % args + "\n")
 
@@ -130,8 +129,8 @@ class Handler(BaseHTTPRequestHandler):
                         "params": {
                             "csi_fs": CSI_FS,
                             "decision_fs": DECISION_FS,
-                            # 24 is a ceiling, not the count actually used: the
-                            # carrier set is derived per hardware ceiling below.
+                            # 24 是上限，而非实际使用的数量：载波集合会依据
+                            # 下方的硬件上限逐项推导。
                             "subcarriers_ceiling": N_SUBCARRIERS,
                             "bands": band_options(),
                             "motion_window_s": MOTION_WINDOW_S,

@@ -1,23 +1,20 @@
-"""Cabin acoustic multipath simulator.
+"""座舱声学多径模拟器。
 
-Implements the signal model of Eq. (1) in the VeCare paper:
+实现 VeCare 论文中 Eq. (1) 的信号模型：
 
     H(f, t) = sum_r a_r(t) exp(-j 2 pi f tau_r(t)) + N(f, t)
 
-A static cabin multipath profile (direct path, seats, windows, roof) is mixed
-with a dynamic reflection from a breathing / moving infant.  The weak body
-reflection interferes with the static paths, producing the frequency-selective
-sensitivity exploited by the SAS model.  Noise bursts and cabin vibrations let
-us test false-alarm rejection.
+一个静态的座舱多径剖面（直达路径、座椅、车窗、车顶）与来自呼吸/运动婴儿的
+动态反射相混合。微弱的人体反射与静态路径相互干涉，产生 SAS 模型所利用的
+频率选择性灵敏度。噪声突发和座舱振动让我们可以检验误报抑制能力。
 
-Media-source note (important when explaining validation):
-    This path synthesises ``|H(f)|`` every 20 ms from physical parameters.  It
-    never reads a WAV file, so direct simulation (Web UI and ``run_offline``)
-    needs no cabin recording at all.  WAVs are used only by the self-check that
-    exercises the audio front end; ``core.replay.render_wav`` creates them on
-    demand under ``data/selfcheck/`` (git-ignored), never shipped with the repo.
-    Real-cabin validation instead needs ``capture.wav`` recorded while
-    ``probe.wav`` is playing; :mod:`core.replay` converts that to the same CSI.
+介质来源说明（解释验证过程时很重要）：
+    本路径每 20 ms 依据物理参数合成 ``|H(f)|``。它从不读取 WAV 文件，因此直接
+    仿真（Web UI 与 ``run_offline``）完全不需要座舱录音。WAV 仅用于检验音频
+    前端的自检；``core.replay.render_wav`` 会按需在 ``data/selfcheck/``
+    （已被 git 忽略）下生成它们，这些文件从不随仓库发布。
+    真车验证则需要一段在播放 ``probe.wav`` 时录制的 ``capture.wav``；
+    :mod:`core.replay` 会把它转换成同样的 CSI。
 """
 from __future__ import annotations
 
@@ -36,9 +33,8 @@ class AcousticChannel:
     ):
         self.scenario = scenario
         self.rng = np.random.default_rng(seed)
-        # Carrier set follows the hardware ceiling, exactly as the audio front
-        # end does -- otherwise the simulated ground truth would be measured on
-        # a band the real driver cannot excite.
+        # 载波集合跟随硬件上限，与音频前端完全一致 —— 否则仿真的真值就会在
+        # 一个真实驱动器无法激励的频带上被测量。
         self.band = band or plan_band(None)
         self.carriers = np.linspace(
             self.band.f_lo, self.band.f_hi, self.band.n_carriers
@@ -48,7 +44,7 @@ class AcousticChannel:
         self._last_breath_t = 0.0
         self._present_since = None
 
-        # Static cabin multipath. Delays are round-trip path delays in seconds.
+        # 静态座舱多径。各时延为往返路径时延，单位为秒。
         self.static_delays = np.array(
             [0.00058, 0.0017, 0.0028, 0.0039, 0.0051, 0.0064, 0.0079, 0.0092]
         )
@@ -86,11 +82,9 @@ class AcousticChannel:
                 offset += ev["amplitude_m"] * 0.5 * (1 - np.cos(2 * np.pi * u))
 
         if tg.awake_jitter_mm > 0:
-            # Slow postural drift of an awake body (<0.15 Hz). It must stay
-            # well below the 10-66 BPM breathing band: a coherent 0.2-0.4 Hz
-            # wobble is a second breathing rhythm and makes the breathing rate
-            # genuinely ambiguous, which is a modelling artefact rather than a
-            # sensing challenge.
+            # 清醒人体的缓慢姿态漂移（<0.15 Hz）。它必须远低于 10-66 BPM 的
+            # 呼吸频带：一个相干的 0.2-0.4 Hz 摆动会被当成第二个呼吸节律，
+            # 使呼吸率真正变得模糊 —— 那是建模产生的伪影，而不是传感难题。
             j = tg.awake_jitter_mm / 1000.0
             offset += j * (0.6 * np.sin(2 * np.pi * 0.06 * t + 0.4)
                            + 0.4 * np.sin(2 * np.pi * 0.11 * t + 1.7))
@@ -106,10 +100,10 @@ class AcousticChannel:
         return sigma
 
     def _paths(self, t: float, dt: float, advance: bool = True) -> dict:
-        """Resolve the delay/gain profile of one 20 ms frame.
+        """解析出一个 20 ms 帧的时延/增益剖面。
 
-        Shared by ``step`` (which advances the breathing phase) and
-        ``impulse_response`` (which must not disturb the timeline).
+        由 ``step``（会推进呼吸相位）和 ``impulse_response``（绝不能扰动时间线）
+        共用。
         """
         tg = self._target
         present = self._target_visible(t)
@@ -122,27 +116,26 @@ class AcousticChannel:
                     drifting_bpm = tg.bpm * (1 + 0.02 * np.sin(2 * np.pi * 0.013 * t))
                     self._phase += 2 * np.pi * drifting_bpm / 60.0 * dt
                     self._last_breath_t = t
-                # chest displacement (peak), decays smoothly if breathing stops
+                # 胸腔位移（峰值）；若呼吸停止则平滑衰减
                 breath_amp_m = tg.chest_mm / 1000.0 * np.sin(self._phase)
                 breathing = True
 
         motion = self._motion_offset(t)
 
-        # Target reflection: weak, range dependent. Ramp in after entry.
+        # 目标反射：幅度弱，且随距离衰减。进入后在短暂时间内逐渐接入。
         a_target = 0.0
         if present and tg is not None:
             age = t - tg.enter_t
             ramp = min(1.0, age / 0.25)
             a_target = tg.reflectivity * ramp * (1.4 / max(1.0, tg.distance_m))
 
-        # Round trip path length. Breathing and body motion modulate the delay.
+        # 往返路径长度。呼吸和身体运动都会调制该时延。
         d = 0.0
         if tg is not None:
             d = tg.distance_m + motion + breath_amp_m
         tau_target = 2 * d / SOUND_SPEED if present else 0.0
 
-        # Cabin vibration during slam / passing-car events: differential
-        # path-length jitter decorrelates the static channel.
+        # 关门 / 车辆驶过事件期间的座舱振动：差分路径长度抖动会使静态信道去相关。
         delays = self.static_delays.copy()
         vib_amp = 0.0
         for b in self.scenario.vibration_bursts:
@@ -150,11 +143,9 @@ class AcousticChannel:
                 u = (t - b["t"]) / b["duration"]
                 vib_amp = b["amplitude_mm"] / 1000.0 * np.sin(np.pi * u) ** 2
         if vib_amp > 0:
-            # vib_amp is a *displacement* in metres; delays are in seconds, so
-            # it has to be divided by the speed of sound. Adding metres to
-            # seconds inflated a 0.05 mm panel vibration into 50 us of delay
-            # jitter (17 mm of apparent motion) and made every door slam look
-            # like a moving body.
+            # vib_amp 是*位移*，单位为米；而时延单位为秒，所以必须除以声速。
+            # 把米直接加到秒上，会把 0.05 mm 的面板振动放大成 50 us 的时延抖动
+            # （相当于 17 mm 的表观位移），使每次关门看起来都像一个运动的人体。
             delays = delays + (vib_amp / SOUND_SPEED) * np.sin(
                 2 * np.pi * 120.0 * t + self._vib_phase
             )
@@ -171,11 +162,10 @@ class AcousticChannel:
         }
 
     def sounding_step(self, dt: float) -> tuple[np.ndarray, np.ndarray, dict]:
-        """Advance the scene and return the frame's (delays, gains, truth).
+        """推进场景并返回该帧的 (时延, 增益, 真值)。
 
-        Unlike ``step`` this does not evaluate the 24-carrier CSI nor draw noise:
-        the audio renderer needs the continuous-frequency CIR, so that the probe
-        can be convolved with it at every audio bin.
+        与 ``step`` 不同，它既不计算 24 载波 CSI，也不绘制噪声：音频渲染器需要
+        连续频率的 CIR，以便探测信号能在每个音频频点与它卷积。
         """
         t = self.t
         p = self._paths(t, dt=dt, advance=True)
@@ -203,7 +193,7 @@ class AcousticChannel:
         return np.asarray(delays, dtype=float), np.asarray(gains, dtype=complex), truth
 
     def step(self, dt: float) -> tuple[np.ndarray, np.ndarray, dict]:
-        """Advance the scene by dt seconds and return (CSI, amplitude, truth)."""
+        """把场景推进 dt 秒，并返回 (CSI, 幅度, 真值)。"""
         t = self.t
         tg = self._target
         p = self._paths(t, dt=dt, advance=True)
@@ -216,8 +206,7 @@ class AcousticChannel:
         delays = p["delays"]
         vib_amp = p["vib_amp"]
 
-        # Common phase offset models speaker/mic asynchronization; it cancels
-        # when only CSI amplitude is used.
+        # 公共相位偏移用于建模扬声器/麦克风的异步；当只使用 CSI 幅度时它会抵消。
         common_phase = self.rng.uniform(-np.pi, np.pi)
         static = self.static_gains[:, None] * np.exp(
             -1j * 2 * np.pi * self.carriers[None, :] * delays[:, None]

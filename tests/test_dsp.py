@@ -1,4 +1,4 @@
-"""Unit tests for the SAS signal-processing core."""
+"""SAS 信号处理核心的单元测试。"""
 import numpy as np
 
 from core.config import DetectorConfig
@@ -16,7 +16,7 @@ FS = 50
 
 
 def _breathing_acf(bpm, window_s=8.0, fs=FS):
-    """Combined ACF of a clean sinusoidal breathing signal."""
+    """干净正弦呼吸信号的合并 ACF。"""
     T = 60.0 / bpm
     t = np.arange(int(window_s * fs)) / fs
     x = (1.0 + 0.1 * np.sin(2 * np.pi * t / T))[:, None] * np.ones((1, 24))
@@ -48,7 +48,7 @@ def test_combine_acf_equal_weights_is_mean():
 
 
 def test_mrc_weights_actually_concentrate():
-    """A single informative subcarrier must dominate the MRC weights."""
+    """单个有信息的子载波必须主导 MRC 权重。"""
     acf = np.random.default_rng(0).standard_normal((200, 8))
     weights = np.zeros(8)
     weights[3] = 4.0
@@ -57,7 +57,7 @@ def test_mrc_weights_actually_concentrate():
     w /= w.sum()
     expected = acf @ w
     assert np.allclose(combined, expected)
-    assert w.max() > 0.6  # concentrated, not flattened to 1/8
+    assert w.max() > 0.6  # 权重集中，而不是被摊平成 1/8
 
 
 def test_subcarrier_coherence_separates_common_mode_from_noise():
@@ -71,14 +71,14 @@ def test_subcarrier_coherence_separates_common_mode_from_noise():
 
 
 def test_interference_pattern_flags_v_shaped_acf():
-    """§5 signature: the ACF falls to a trough and climbs back (V shape)."""
+    """§5 特征：ACF 下降到一个谷底再回升（V 形）。"""
     lag = np.arange(26)
-    v_shape = np.abs(lag - 8) / 8.0 * 0.8  # 1.0 -> 0 -> 1.0 over 0..16
+    v_shape = np.abs(lag - 8) / 8.0 * 0.8  # 在 0..16 上从 1.0 -> 0 -> 1.0
     assert interference_pattern(v_shape)
 
-    # a monotone decay, as produced by slow body motion, must not match
+    # 缓慢身体运动产生的单调衰减，必须不匹配
     assert not interference_pattern(np.exp(-lag / 6.0))
-    # a breathing ACF over the first 0.5 s only dips slightly
+    # 呼吸 ACF 在前 0.5 s 内只会轻微下凹
     t = np.arange(8 * FS) / FS
     breath = (1 + 0.1 * np.sin(2 * np.pi * t / 3.3))[:, None] * np.ones((1, 4))
     assert not interference_pattern(autocorr(breath, 25).mean(axis=1))
@@ -94,7 +94,7 @@ def test_find_breathing_peak_recovers_period():
 
 
 def test_breathing_rate_not_halved_above_45_bpm():
-    """Regression: boundary-truncated prominence used to pick the harmonic."""
+    """回归测试：过去被边界截断的突出度会导致选中谐波。"""
     cfg = DetectorConfig()
     for bpm in (15.0, 20.0, 30.0, 40.0, 50.0, 55.0, 60.0, 70.0):
         peak = find_breathing_peak(_breathing_acf(bpm), FS, cfg, int(8 * FS))

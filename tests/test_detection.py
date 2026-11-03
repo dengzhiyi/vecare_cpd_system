@@ -1,4 +1,4 @@
-"""Detection state-machine, alarm timing and offline scenario tests."""
+"""检测状态机、告警时序与离线场景测试。"""
 import pytest
 
 from core.config import DetectorConfig
@@ -8,15 +8,14 @@ from core.offline import run_offline
 INVALID_PEAK = {"valid": False, "confidence": 0.0, "bpm": None}
 VALID_PEAK = {"valid": True, "confidence": 0.9, "bpm": 20.0}
 
-# Synthetic motion features (energy is absolute, the detector normalises by the
-# calibrated background).
+# 合成运动特征（能量为绝对值，检测器会用校准后的背景进行归一化）。
 QUIET = {"energy": 0.014, "coherence": 0.10, "interference": False}
 MOVING = {"energy": 0.032, "coherence": 0.20, "interference": False}
 NOISY = {"energy": 0.030, "coherence": 0.10, "interference": False}
 
 
 def _calibrate(cfg, det, step=0.1):
-    """Feed quiet frames until the detector leaves CALIBRATING."""
+    """持续送入安静帧，直到检测器离开 CALIBRATING。"""
     t = 0.0
     limit = int(cfg.calibration_s * 1.5 / step) + 20
     for _ in range(limit):
@@ -59,15 +58,15 @@ def test_motion_presence_then_alarm_within_budget():
     assert snap["alarm"] is True
     assert snap["alarm_reason"] == "PRESENCE"
     assert snap["state"] == "ALARM"
-    # the budget is counted from the first evidence sample, so confirmation
-    # latency is charged against it rather than added on top
+    # 预算从首个证据样本起算，因此确认延迟是计入预算的，
+    # 而不是额外叠加在上面
     assert det.alarm_since - first_evidence == pytest.approx(
         cfg.response_budget_s, abs=1e-6
     )
 
 
 def test_incoherent_noise_never_confirms_presence():
-    """High residual energy with low subcarrier coherence is ambient noise."""
+    """残差能量高但子载波相干性低，属于环境噪声。"""
     cfg = DetectorConfig(calibration_s=1.0)
     det = CPDDetector(cfg)
     t = _calibrate(cfg, det)
@@ -117,7 +116,7 @@ def test_acknowledge_mutes_but_keeps_presence():
 
 
 def test_acknowledged_alarm_clears_after_evidence_disappears():
-    """Muting is not a latch: once the cabin is quiet the system must reset."""
+    """静音不是锁存：车厢安静下来后系统必须复位。"""
     cfg = DetectorConfig(
         calibration_s=1.0, response_budget_s=2.0, clear_timeout_s=2.0
     )
@@ -171,15 +170,15 @@ def test_offline_sleeping_scenario_meets_response_budget():
     assert m["detected"] is True
     assert m["false_presence_frames"] == 0
     assert m["alarm_at"] is not None
-    # the paper's 10 s requirement governs the budget measured from the first
-    # evidence sample, not the confirmation moment
+    # 论文的 10 s 要求约束的是从首个证据样本起算的预算，
+    # 而不是从确认时刻起算的预算
     assert m["response_time_s"] is not None and m["response_time_s"] <= 10.05
     assert m["alarm_reason"] == "PRESENCE"
     assert m["bpm_mae"] is not None and m["bpm_mae"] < 2.0
 
 
 def test_offline_active_child_drives_the_motion_channel():
-    """Limb movement must produce motion evidence, not just breathing."""
+    """肢体运动必须产生运动证据，而不仅仅是呼吸。"""
     result = run_offline("active")
     m = result["metrics"]
     assert m["detected"] is True

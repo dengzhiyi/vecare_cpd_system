@@ -1,13 +1,12 @@
-"""Real-time simulation engine with session recording.
+"""带会话记录的实时仿真引擎。
 
-Runs the acoustic channel + SAS pipeline at wall-clock pace (scaled by a speed
-multiplier), drives the CPD state machine, and writes replayable JSONL logs.
+按照真实时钟节奏（可乘以速度倍数）运行声学信道 + SAS 流水线，驱动 CPD 状态机，
+并写出可回放的 JSONL 日志。
 
-The Web UI drives this path, so live monitoring is direct simulation: CSI is
-synthesised every 20 ms and no WAV/audio is involved.  The JSONL sessions keep
-CSI amplitudes plus decisions for replay; they are not audio recordings.  WAV
-input belongs to ``replay_audio.py`` / ``core.replay`` and, for the self-check,
-to the git-ignored ``data/selfcheck/`` renders.
+Web UI 走的正是这条路径，因此实时监测就是直接仿真：CSI 每 20 ms 合成一次，
+不涉及任何 WAV/音频。JSONL 会话保存 CSI 幅度和判决以供回放；它们不是录音。
+WAV 输入属于 ``replay_audio.py`` / ``core.replay``，而自检则属于被 git 忽略的
+``data/selfcheck/`` 渲染产物。
 """
 from __future__ import annotations
 
@@ -61,7 +60,7 @@ class SimulationEngine:
         self.summary: dict | None = None
 
     # ------------------------------------------------------------------
-    # control
+    # 控制
     def start(
         self,
         scenario_key: str,
@@ -161,7 +160,7 @@ class SimulationEngine:
         return self.status()
 
     # ------------------------------------------------------------------
-    # simulation loop
+    # 仿真循环
     def _loop(self) -> None:
         dt = 1.0 / CSI_FS
         try:
@@ -264,15 +263,14 @@ class SimulationEngine:
                 )
 
     # ------------------------------------------------------------------
-    # queries
+    # 查询
     def status(self) -> dict:
         with self.lock:
             det = None
             if self.pipeline is not None:
                 det = self.pipeline.detector.snapshot(self.sim_t)
-            # The band is fixed at start; the count actually in use can drop
-            # once runtime health gating prunes dead carriers, so read it from
-            # the newest frame rather than echoing the plan.
+            # 频带在启动时即固定；一旦运行时健康门控裁剪掉死载波，实际使用的
+            # 载波数量会下降，因此从最新一帧读取它，而不是回显规划值。
             carriers_used = None
             if self.frames:
                 carriers_used = self.frames[-1]["features"].get("carriers_used")
@@ -307,7 +305,7 @@ class SimulationEngine:
             if session == self.session_id:
                 frames = [f for f in self.frames if f["seq"] > after_seq]
             else:
-                # Client switched to a new (or reconnected) session: send all.
+                # 客户端切换到了一个新的（或重连的）会话：发送全部帧。
                 frames = list(self.frames)
             scenario = None if self.scenario is None else self.scenario.public()
             return {

@@ -1,1 +1,1 @@
-"""VeCare SAS prototype core."""
+"""VeCare SAS 功能样机核心。"""

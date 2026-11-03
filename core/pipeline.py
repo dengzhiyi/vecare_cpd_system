@@ -1,26 +1,22 @@
-"""SAS feature pipeline shared by the real-time engine and offline evaluation.
+"""实时引擎与离线评估共用的 SAS 特征流水线。
 
-The pipeline keeps a sliding CSI-amplitude buffer, computes the motion channel
-on a short (1 s) window and the breathing channel on a long (8 s) window every
-100 ms (10 Hz decisions), then feeds both into the CPD state machine.
+流水线维护一个滑动的 CSI 幅度缓冲区，每 100 ms（即 10 Hz 判决）在短窗（1 s）上
+计算 motion 通道、在长窗（8 s）上计算 breathing 通道，然后两者都送入 CPD 状态机。
 
-``fs`` is the incoming CSI frame rate. It defaults to the 50 Hz the simulator
-produces; a real capture sets it to the rate implied by its probe period
-(48 000 / 960 samples = 50 Hz for the default chirp).
+``fs`` 是输入的 CSI 帧率。默认为仿真器产生的 50 Hz；真实采集时会将其设为
+探测周期所隐含的帧率（默认 chirp 下为 48 000 / 960 采样 = 50 Hz）。
 
-Carrier pruning
----------------
-Planning the band from the hardware ceiling (``plan_band``) is the design-time
-fix, but a driver's -3 dB point is rarely where its datasheet claims, and the
-rolloff is not the only thing that can kill a carrier -- a microphone grille,
-phone placement, or a cabin absorber can gut part of the band on one vehicle
-and not the next. So the pipeline also checks at runtime: during the quiet
-calibration window it measures each carrier's relative jitter and drops the
-ones that are an order of magnitude above their peers (``carrier_health``).
+载波裁剪
+--------
+依据硬件上限规划频带（``plan_band``）是设计期的修正手段，但驱动器的 -3 dB
+点很少与数据手册声称的一致，而且滚降并不是唯一会“杀死”载波的因素 ——
+麦克风网罩、手机摆放位置或座舱吸声材料都可能削弱某个频带的一部分，
+在一辆车上出现而在另一辆车上不出现。因此流水线还在运行时做检查：在安静的
+校准窗内测量每个载波的相对抖动，并剔除那些比同伴高出一个数量级的载波
+（``carrier_health``）。
 
-Pruning only removes columns from the DSP input. The ``csi`` field written to
-each frame keeps every carrier, because a dead carrier is real information --
-it is what tells an operator the hardware, not the algorithm, is out of band.
+裁剪只会从 DSP 输入中移除列。写入每一帧的 ``csi`` 字段仍保留全部载波，
+因为死掉的载波本身就是真实信息 —— 它告诉操作员的是硬件而非算法出了问题。
 """
 from __future__ import annotations
 
@@ -51,9 +47,9 @@ class SASPipeline:
         self.seq = 0
         self.decision_every = max(1, int(round(self.fs / DECISION_FS)))
 
-        # --- runtime carrier pruning ---------------------------------------
+        # --- 运行时载波裁剪 ---------------------------------------------
         self.auto_prune = auto_prune
-        self.n_carriers = None            # fixed by the first frame
+        self.n_carriers = None            # 由第一帧固定下来
         self.carrier_mask: np.ndarray | None = None
         self.carrier_jitter: np.ndarray | None = None
         self.prune_threshold = None
@@ -61,7 +57,7 @@ class SASPipeline:
         self._calib_frames = int(round(max(2.0, self.cfg.calibration_s) * self.fs))
 
     def _maybe_prune(self, amp: np.ndarray) -> None:
-        """Decide once, from the calibration window, then never again."""
+        """只依据校准窗决定一次，之后不再改变。"""
         if not self.auto_prune or self.carrier_mask is not None:
             return
         self._calib.append(amp)
@@ -71,10 +67,10 @@ class SASPipeline:
         self.carrier_jitter = jitter
         self.prune_threshold = threshold
         self.carrier_mask = alive
-        self._calib = []          # release the buffer either way
+        self._calib = []          # 无论结果如何都释放该缓冲区
 
     def step(self, t: float, amp: np.ndarray, truth: dict | None = None) -> dict | None:
-        """Feed one CSI frame; return a decision frame every 100 ms."""
+        """送入一帧 CSI；每 100 ms 返回一个判决帧。"""
         amp = np.asarray(amp, dtype=np.float64)
         if self.n_carriers is None:
             self.n_carriers = int(amp.size)
@@ -109,7 +105,7 @@ class SASPipeline:
             "t": round(float(t), 2),
             "state": snap,
             "features": {
-                # decision statistic: residual energy / calibrated background
+                # 判决统计量：残差能量 / 校准得到的背景电平
                 "motion": snap["motion_ratio"],
                 "motion_energy": round(float(features["energy"]), 4),
                 "motion_coherence": round(float(features["coherence"]), 3),

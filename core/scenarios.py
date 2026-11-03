@@ -1,7 +1,6 @@
-"""Preset cabin scenarios used by the functional prototype.
+"""功能样机使用的预置座舱场景。
 
-Each scenario describes a ground-truth timeline (used only for simulation and
-for the event markers in the UI) plus the acoustic scene parameters.
+每个场景都描述一条真值时间线（仅用于仿真以及 UI 中的事件标记）以及声学场景参数。
 """
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
@@ -154,8 +153,7 @@ _add(Scenario(
         {"t": 16.0, "duration": 0.8, "multiplier": 4.5},
         {"t": 31.0, "duration": 2.6, "multiplier": 2.2},
         {"t": 46.0, "duration": 1.0, "multiplier": 3.8},
-        # sustained interference: exercises both the coherence gate and the
-        # impulse-pattern detector
+        # 持续干扰：同时考验相干性门控和脉冲模式检测器
         {"t": 55.0, "duration": 3.4, "multiplier": 2.6},
     ],
     vibration_bursts=[

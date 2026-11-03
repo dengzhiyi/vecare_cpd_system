@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line entry for the real-audio path.
+"""真实音频路径的命令行入口。
 
     # 1. 生成探测音（录音时必须播放它）
     python replay_audio.py --emit-probe probe.wav --seconds 300
@@ -13,13 +13,12 @@
     # 4. 存成可回放的会话，之后在 Web UI「日志回放」里看
     python replay_audio.py capture.wav --save data/sessions
 
-Media sources:
-    ``--selfcheck`` renders the seven scenarios to ``data/selfcheck/*.wav``
-    (git-ignored) and replays them; this is the only WAV the project generates
-    itself, and it is regenerated on every run.  Real validation requires a
-    ``capture.wav`` recorded at >= 48 kHz while ``probe.wav`` is looping; the
-    repo ships no real cabin recording.  Without the probe, a cabin recording
-    contains only speech/road noise and cannot yield CSI.
+介质来源：
+    ``--selfcheck`` 把七个场景渲染成 ``data/selfcheck/*.wav``（已被 git 忽略）
+    并回放它们；这是本项目唯一自行生成的 WAV，且每次运行都会重新生成。
+    真实验证需要在 ``probe.wav`` 循环播放时，以 >= 48 kHz 录制一段
+    ``capture.wav``；仓库不附带任何真实座舱录音。没有探测音时，座舱录音
+    只包含语音/路噪，无法产生 CSI。
 """
 from __future__ import annotations
 
@@ -95,11 +94,10 @@ def print_report(result: dict) -> None:
 
 
 def selfcheck(snr_db: float, out_dir: Path, hw_f_max: float | None = None) -> int:
-    """Render every scenario to WAV, replay it, and compare with the simulator.
+    """把每个场景渲染成 WAV、回放它，并与仿真结果对比。
 
-    This is the only check that separates front-end faults from scene
-    difficulty: both sides see the same scene, so a mismatch means the audio
-    path is wrong.
+    这是唯一能把前端故障与场景难度区分开的检查：两边看到的是同一个场景，
+    因此结果不一致就意味着音频链路有问题。
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     band = plan_band(hw_f_max)
@@ -126,7 +124,7 @@ def selfcheck(snr_db: float, out_dir: Path, hw_f_max: float | None = None) -> in
         ]
         print(f"{key:<10}{cells[0]:>20}{cells[1]:>20}{cells[2]:>18}{cells[3]:>12}")
 
-        # the contract: same alarm decision, same BPM band
+        # 契约：告警判决相同，BPM 区间相同
         alarm_mismatch = (direct["alarm_at"] is None) != (replayed["alarm_at"] is None)
         bpm = replayed["bpm_median"]
         bpm_ok = true_bpm is None or (bpm is not None and abs(bpm - true_bpm) <= 0.15 * true_bpm)
@@ -141,7 +139,7 @@ def selfcheck(snr_db: float, out_dir: Path, hw_f_max: float | None = None) -> in
 
 
 def save_session(result: dict, sessions_root: Path) -> Path:
-    """Write the replay as a session the Web UI can load."""
+    """把回放结果写成 Web UI 可加载的会话。"""
     now = datetime.now()
     stem = Path(result["source"]["path"]).stem[:40] or "wav"
     safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in stem).strip("-") or "wav"

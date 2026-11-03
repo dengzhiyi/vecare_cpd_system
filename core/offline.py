@@ -1,7 +1,7 @@
-"""Offline scenario runner and prototype metrics.
+"""离线场景运行器与样机指标。
 
-Used by the test-suite and by ``replay_audio.py --selfcheck``: no wall-clock
-pacing, so an entire scenario can be scored in a fraction of the time.
+供测试套件和 ``replay_audio.py --selfcheck`` 使用：不按真实时钟节奏推进，
+因此整个场景可以在很短的时间内完成评分。
 """
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def evaluate_frames(frames: list[dict], scenario) -> dict:
         float(np.mean([abs(b - g) for b, g in bpm_pairs])) if bpm_pairs else None
     )
 
-    # MRC observability: how many subcarriers actually carry the combined ACF.
+    # MRC 可观测性：实际有多少个子载波承载了合并后的 ACF。
     neff = []
     for f in frames:
         g = np.asarray(f["features"].get("gains") or [], dtype=float)
@@ -120,7 +120,7 @@ def evaluate_frames(frames: list[dict], scenario) -> dict:
         "alarm_latency_s": None
         if alarm_at is None or enter_t is None
         else round(alarm_at - enter_t, 2),
-        # The 10 s CPD budget governs this number, not alarm_latency_s.
+        # 该数值由 10 s 的 CPD 预算决定，而不是 alarm_latency_s。
         "response_time_s": None
         if alarm_at is None or first_evidence is None
         else round(alarm_at - first_evidence, 2),

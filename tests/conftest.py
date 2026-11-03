@@ -1,4 +1,4 @@
-"""Make the repository root importable when running pytest from any directory."""
+"""让仓库根目录在任意目录下运行 pytest 时都可被导入。"""
 import sys
 from pathlib import Path
 

@@ -64,7 +64,7 @@ body::before {
 .hidden { display: none !important; }
 
 /* ------------------------------------------------------------------ */
-/* top bar                                                             */
+/* 顶栏                                                                 */
 .topbar {
   display: flex;
   align-items: center;
@@ -140,7 +140,7 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
-/* alarm banner                                                        */
+/* 告警横幅                                                              */
 .alarm-banner {
   display: flex;
   align-items: center;
@@ -192,7 +192,7 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
-/* layout                                                              */
+/* 页面布局                                                              */
 .layout {
   display: grid;
   grid-template-columns: 332px minmax(0, 1fr);
@@ -246,7 +246,7 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
-/* controls                                                            */
+/* 控制面板                                                              */
 .control-card { padding-bottom: 16px; }
 .scenario-list {
   display: grid;
@@ -437,7 +437,7 @@ input[type="range"]::-moz-range-thumb {
 .session-line span { color: var(--muted); }
 
 /* ------------------------------------------------------------------ */
-/* session list / player                                               */
+/* 会话列表与播放器                                                       */
 .session-list {
   position: relative;
   z-index: 1;
@@ -506,7 +506,7 @@ input[type="range"]::-moz-range-thumb {
 .downloads a:hover { color: var(--teal); border-color: rgba(71, 224, 192, 0.4); }
 
 /* ------------------------------------------------------------------ */
-/* truth                                                               */
+/* 真值卡                                                                */
 .truth-card .card-head { align-items: center; }
 .truth-grid {
   position: relative;
@@ -566,7 +566,7 @@ input[type="range"]::-moz-range-thumb {
 .switch input:checked + span::after { transform: translateX(16px); background: var(--teal); }
 
 /* ------------------------------------------------------------------ */
-/* hero                                                                */
+/* 核心指标                                                              */
 .hero {
   display: grid;
   grid-template-columns: minmax(240px, 1.05fr) minmax(0, 2.2fr);
@@ -717,7 +717,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ------------------------------------------------------------------ */
-/* mid grid                                                            */
+/* 中部网格                                                              */
 .mid-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
@@ -816,7 +816,7 @@ input[type="range"]::-moz-range-thumb {
 .lg-presence { background: var(--teal); }
 .lg-alarm { background: var(--red); }
 
-/* events */
+/* 事件流                                                                */
 .events-card { display: flex; flex-direction: column; }
 .event-list {
   position: relative;
@@ -864,7 +864,7 @@ input[type="range"]::-moz-range-thumb {
 @keyframes event-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* ------------------------------------------------------------------ */
-/* charts                                                              */
+/* 图表                                                                 */
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -892,7 +892,7 @@ input[type="range"]::-moz-range-thumb {
 .chart-foot b { font-weight: 500; color: var(--muted); font-size: 9.5px; white-space: nowrap; }
 
 /* ------------------------------------------------------------------ */
-/* footer / about                                                      */
+/* 页脚与模型说明                                                         */
 .disclaimer {
   padding: 6px 4px 0;
   font-size: 9.5px;
@@ -983,7 +983,7 @@ input[type="range"]::-moz-range-thumb {
 .param-list dt { font-size: 10.5px; color: var(--muted); }
 .param-list dd { margin: 0; font-family: var(--mono); font-size: 10.5px; color: #cfe0ef; }
 
-/* toast */
+/* 轻提示                                                                */
 .toast {
   position: fixed;
   left: 50%;
@@ -1004,7 +1004,7 @@ input[type="range"]::-moz-range-thumb {
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ------------------------------------------------------------------ */
-/* responsive                                                          */
+/* 响应式                                                                */
 @media (max-width: 1240px) {
   .top-badges { display: none; }
   .hero { grid-template-columns: 1fr; gap: 16px; }

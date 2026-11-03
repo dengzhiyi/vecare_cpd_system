@@ -1,7 +1,7 @@
 'use strict';
 
 /* ------------------------------------------------------------------ */
-/* state                                                               */
+/* 全局状态                                                             */
 const $ = (id) => document.getElementById(id);
 
 const S = {
@@ -12,7 +12,7 @@ const S = {
   selected: 'sleeping',
   sensitivity: 1.0,
   speed: 1.0,
-  hwFMax: null,     // null = the paper band; otherwise the -3 dB ceiling in Hz
+  hwFMax: null,     // null 表示论文频带；否则为 -3 dB 硬件频响上限（Hz）
   bands: [],
   truthVisible: true,
   live: {
@@ -40,14 +40,14 @@ const HEAT_STOPS = [
 const CAT_LABEL = { baseline: 'BASELINE', presence: 'PRESENCE', critical: 'CRITICAL' };
 
 /* ------------------------------------------------------------------ */
-/* helpers                                                             */
+/* 工具函数                                                             */
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
   let body = null;
-  try { body = await res.json(); } catch (_) { /* ignore */ }
+  try { body = await res.json(); } catch (_) { /* 解析失败时忽略 */ }
   if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
   return body;
 }
@@ -85,12 +85,14 @@ function debounce(fn, ms) {
 }
 
 /* ------------------------------------------------------------------ */
-/* boot                                                                */
+/* 启动                                                                 */
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   bindUI();
   try {
+    /* 初始化：GET /api/scenarios 一次取回场景清单、默认参数与硬件频带档位。
+       真正的“仿真”由下方 /api/live/start 触发，Web UI 本身不做声学计算。 */
     const data = await api('/api/scenarios');
     S.scenarios = data.scenarios || [];
     S.params = data.params || {};
@@ -142,6 +144,8 @@ function bindUI() {
       S.speed = Number(chip.dataset.speed);
       $('liveSpeedChips').querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === chip));
       if (S.live.status && S.live.status.running) {
+        /* 运行中改倍速：POST /api/live/speed，请求体 {speed: 1/2/4/8/16}。
+           后端只改变仿真推进速率，不重置 CSI 缓存和检测状态。 */
         api('/api/live/speed', { method: 'POST', body: JSON.stringify({ speed: S.speed }) })
           .catch((err) => toast(err.message));
       }
@@ -172,7 +176,10 @@ function bindUI() {
 }
 
 /* ------------------------------------------------------------------ */
-/* live polling                                                        */
+/* 实时增量拉流：GET /api/live?since=<lastSeq>&session=<sessionId>
+   后端返回自 since 之后的新决策帧、当前检测器状态和事件列表。仿真线程在
+   /api/live/start 后异步运行，因此 UI 用 320 ms 轮询模拟“实时流”；since
+   与 session 共同做增量过滤，切场景后 session 变化会触发本地缓存清空。 */
 async function pollLive() {
   if (S.live.polling) return;
   S.live.polling = true;
@@ -203,7 +210,7 @@ async function pollLive() {
       maybeBeep(S.live.frames.length ? S.live.frames[S.live.frames.length - 1].state : status.detector);
     }
   } catch (_) {
-    /* server might still be starting; the next poll retries */
+    /* 服务器可能仍在启动，下一轮轮询会自动重试 */
   } finally {
     S.live.polling = false;
   }
@@ -216,7 +223,7 @@ async function refreshStatus() {
 }
 
 /* ------------------------------------------------------------------ */
-/* live controls                                                       */
+/* 实时监测控件                                                         */
 function renderScenarioList() {
   const list = $('scenarioList');
   list.innerHTML = S.scenarios.map((s) => `
@@ -242,9 +249,8 @@ function renderScenarioNote() {
   $('selectedScenarioNote').textContent = `${sc.description} 预期：${sc.expected}`;
 }
 
-/* Hardware ceiling chips. The band itself is planned server-side (plan_band),
-   so the counts and edges shown here are always the ones the DSP will use --
-   nothing about the band is re-derived in the browser. */
+/* 硬件频响上限档位。频带由后端 plan_band 统一规划，前端只展示后端返回的
+   载波数与上下边界，不在浏览器里重复推导。 */
 const fmtKHz = (v) => (v / 1000).toFixed(1);
 
 function renderBandChips() {
@@ -270,6 +276,14 @@ function syncBandNote() {
   $('bandCars').textContent = `${band.n_carriers} 路 · ${Math.round(band.spacing_hz)} Hz`;
 }
 
+/* 启动仿真：POST /api/live/start
+   请求体 {scenario, sensitivity, speed, hw_f_max}：
+   - scenario：场景键（见 GET /api/scenarios）
+   - sensitivity：检测灵敏度倍率
+   - speed：仿真倍速（1/2/4/8/16）
+   - hw_f_max：硬件频响上限（null/14k/16k/18k/20k），决定载波频带
+   后端创建 SimulationEngine 线程，按 50 Hz 合成 CSI 并驱动 SAS 检测器；
+   返回 status.session_id，同时把本次运行写入 data/sessions 供回放。 */
 async function startMonitor() {
   ensureAudio();
   $('startBtn').disabled = true;
@@ -298,6 +312,8 @@ async function startMonitor() {
   }
 }
 
+/* 暂停/继续：POST /api/live/pause，请求体 {paused: true|false}。
+   只冻结仿真时钟，不清空已有帧和检测状态。 */
 async function togglePause() {
   if (!S.live.status || !S.live.status.running) return;
   try {
@@ -318,6 +334,8 @@ async function togglePause() {
   }
 }
 
+/* 停止：POST /api/live/stop，结束仿真线程并写入会话 meta（状态、总时长、
+   帧数、事件数与评估摘要）。停止后本次会话出现在“日志回放”列表。 */
 async function stopMonitor() {
   try {
     await api('/api/live/stop', { method: 'POST', body: '{}' });
@@ -329,6 +347,8 @@ async function stopMonitor() {
   }
 }
 
+/* 确认静音：POST /api/live/ack，只取消告警声与告警态，不解除存在锁存；
+   若随后连续 25 s 无运动/呼吸证据，后端会自行清除告警并回到监测中。 */
 async function acknowledge() {
   try {
     await api('/api/live/ack', { method: 'POST', body: '{}' });
@@ -370,7 +390,7 @@ function renderBandRun(st) {
 }
 
 /* ------------------------------------------------------------------ */
-/* view switching                                                      */
+/* 视图切换                                                              */
 function setView(view) {
   if (view === 'about') {
     if (S.view !== 'about') S.lastNonAboutView = S.view;
@@ -398,7 +418,7 @@ function renderCurrent() {
 }
 
 /* ------------------------------------------------------------------ */
-/* dashboard rendering                                                 */
+/* 仪表盘渲染                                                            */
 function renderLive() {
   syncControls();
   if (S.view !== 'live') return;
@@ -421,7 +441,7 @@ function renderDashboard(frames, det, opts = {}) {
   renderAlarmBanner(det, opts);
 }
 
-/* state labels */
+/* 状态文案 */
 function stateMeta(state, det, last, opts) {
   const t = last ? last.t : (det ? det.t : 0);
   const presenceFor = det && det.presence_since != null && last ? Math.max(0, last.t - det.presence_since) : null;
@@ -595,7 +615,7 @@ function renderAlarmBanner(det, opts) {
 }
 
 /* ------------------------------------------------------------------ */
-/* charts                                                              */
+/* 图表                                                                 */
 function setupCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -979,7 +999,9 @@ function niceCeil(value, minStep = 0.1) {
 }
 
 /* ------------------------------------------------------------------ */
-/* replay                                                              */
+/* 日志回放                                                              */
+/* 日志回放列表：GET /api/sessions 返回 data/sessions 下每个会话的摘要
+   （场景、状态、时长、帧数、是否告警），不包含 CSI 原始音频。 */
 async function loadSessions() {
   try {
     const data = await api('/api/sessions');
@@ -1011,6 +1033,9 @@ async function loadSessions() {
   }
 }
 
+/* 载入会话：GET /api/sessions/<id> 取回 frames.jsonl / events.jsonl / meta.json；
+   meta 中的 summary 用于展示首次确认、告警时刻与响应时间。
+   下载链接 GET /api/sessions/<id>/download/<file> 导出原始 JSONL。 */
 async function selectSession(id) {
   try {
     const data = await api(`/api/sessions/${encodeURIComponent(id)}`);
@@ -1093,11 +1118,11 @@ function scheduleReplay() {
 }
 
 /* ------------------------------------------------------------------ */
-/* alarm audio                                                         */
+/* 告警音                                                                */
 function ensureAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!S.audio.ctx && AC) {
-    try { S.audio.ctx = new AC(); } catch (_) { /* ignore */ }
+    try { S.audio.ctx = new AC(); } catch (_) { /* 浏览器不支持时静默降级 */ }
   }
   if (S.audio.ctx && S.audio.ctx.state === 'suspended') {
     S.audio.ctx.resume().catch(() => {});

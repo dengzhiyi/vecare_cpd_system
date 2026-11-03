@@ -1,29 +1,26 @@
-"""Replay a recorded WAV through the SAS pipeline.
+"""把录制的 WAV 经 SAS 流水线回放。
 
-This is the bridge between a real capture and the detector. The simulator hands
-``SASPipeline`` 24 complex channel coefficients every 20 ms; a recording only
-gives a microphone waveform. The chain is:
+这是真实采集与检测器之间的桥梁。仿真器每 20 ms 交给 ``SASPipeline``
+24 个复信道系数；而录音只能提供麦克风波形。处理链路为：
 
     probe -> (speaker, cabin, mic) -> WAV -> frame sync -> |H(f)| -> pipeline
 
-``render_wav`` closes the loop in the other direction: it turns a simulated
-scenario into a WAV, so the whole audio path can be checked end to end without
-any hardware. That check is the only honest way to trust a real capture's
-numbers -- if the rendered WAV does not reproduce the simulator's own verdict,
-the front end is at fault, not the cabin.
+``render_wav`` 则向相反方向闭环：它把一个仿真场景转成 WAV，因此整条音频链路
+无需任何硬件即可端到端检验。这项检验是唯一能让人信任真实采集数值的诚实方式
+—— 如果渲染出的 WAV 无法重现仿真器自己的判定，那问题就在前端，而不是座舱。
 
-Known modelling assumption: the probe repeats every 20 ms, so the estimate
-assumes the cabin impulse response is shorter than 20 ms (6.9 m of path). A
-large gym-hall reverb would wrap around and alias; a car cabin does not.
+已知的建模假设：探测信号每 20 ms 重复一次，因此该估计假设座舱冲激响应短于
+20 ms（即 6.9 m 的路径）。大型体育馆式的混响会发生环绕并产生混叠；而车内座舱
+不会。
 
-Where the "cabin recording" comes from:
-    * direct simulation (UI / run_offline) uses core.channel, no WAV at all;
-    * ``--selfcheck`` renders all seven scenarios into ``data/selfcheck/*.wav``
-      on every run (git-ignored) and feeds them back through this module;
-    * real validation needs a user-recorded ``capture.wav`` made while the
-      exported ``probe.wav`` loops in the cabin.
-    Session logs under ``data/sessions`` store CSI amplitudes and decisions --
-    they are not audio and cannot be replayed through an audio front end.
+“座舱录音”从哪里来：
+    * 直接仿真（UI / run_offline）使用 core.channel，完全不用 WAV；
+    * ``--selfcheck`` 每次运行都把全部七个场景渲染成 ``data/selfcheck/*.wav``
+      （已被 git 忽略），再通过本模块回放；
+    * 真实验证需要一段由用户录制的 ``capture.wav``，录制时需在座舱内循环播放
+      导出的 ``probe.wav``。
+    ``data/sessions`` 下的会话日志保存的是 CSI 幅度和判决 —— 它们不是音频，
+    无法通过音频前端回放。
 """
 from __future__ import annotations
 
@@ -58,7 +55,7 @@ from .scenarios import get_scenario
 
 
 # ---------------------------------------------------------------------------
-# probe export
+# 探测信号导出
 # ---------------------------------------------------------------------------
 
 def export_probe(
@@ -67,15 +64,13 @@ def export_probe(
     fs: int = AUDIO_FS,
     hw_f_max: float | None = None,
 ) -> dict:
-    """Write the sounding signal as a WAV you can play during a capture.
+    """把探测信号写成 WAV，供采集时播放。
 
-    The probe has to be playing while you record; without it there is no CSI to
-    estimate, only speech and road noise.
+    录音时必须同时播放探测信号；没有它就没有 CSI 可估计，只有语音和路噪。
 
-    ``hw_f_max`` is the measured -3 dB ceiling of speaker + microphone. Sounding
-    above it is not free: the sweep spends period energy on frequencies the
-    driver cannot reproduce, so every carrier that *is* used comes out noisier.
-    Pass the real ceiling and the sweep shrinks to fit.
+    ``hw_f_max`` 是扬声器 + 麦克风实测的 -3 dB 上限。在该上限之上发声并非没有
+    代价：扫频会把周期能量花在驱动器无法重现的频率上，于是每个*实际使用*的
+    载波都会变得更嘈杂。传入真实上限，扫频就会收缩以适配。
     """
     probe = make_probe(fs=fs, hw_f_max=hw_f_max)
     reps = max(1, int(round(seconds * probe.csi_fs)))
@@ -106,15 +101,14 @@ def load_csi(
     min_peak_ratio: float = 0.2,
     hw_f_max: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Read a WAV and return ``(amplitude, times, meta)``.
+    """读取一个 WAV，并返回 ``(amplitude, times, meta)``。
 
-    ``amplitude`` has shape ``(n_frames, n_carriers)``; ``times`` are true
-    positions in the file, so a dropped frame shows up as a real gap in time
-    rather than silently stretching the series.
+    ``amplitude`` 的形状为 ``(n_frames, n_carriers)``；``times`` 是文件中的真实
+    位置，因此丢失的帧会表现为时间上的真实空隙，而不是无声无息地把序列拉伸。
 
-    ``hw_f_max`` plans the carrier band around the hardware's usable ceiling
-    instead of the paper's 23.5 kHz. Without it, a 16 kHz driver is asked for
-    carriers it cannot emit -- see ``config.plan_band``.
+    ``hw_f_max`` 依据硬件可用上限来规划载波频带，而不是采用论文的 23.5 kHz。
+    不传它时，16 kHz 的驱动器会被要求提供它无法发出的载波 —— 见
+    ``config.plan_band``。
     """
     x, native_fs = read_wav(path, target_fs=fs)
     band = plan_band(hw_f_max)
@@ -164,20 +158,19 @@ def load_csi(
         "duration_s": round(float(times[-1]), 2),
         "sync": sync,
         "probe_db_min": round(float(probe_condition_db(probe, carriers).min()), 2),
-        # crude level check: a clipped or near-silent capture is the most common
-        # reason a recording "does nothing"
+        # 粗略的电平检查：削波或近乎无声的采集，是录音“毫无反应”最常见的原因
         "peak": round(float(np.max(np.abs(x))), 4),
         "rms": round(float(np.sqrt(np.mean(x**2))), 5),
         "clipped_samples": int(np.sum(np.abs(x) >= 0.999)),
-        # handed to run_wav so a pruned carrier can be named by frequency;
-        # popped before the meta reaches a caller.
+        # 交给 run_wav，以便按频率指认被裁剪的载波；
+        # 在 meta 到达调用方之前会被弹出。
         "_carriers": [round(float(f), 1) for f in carriers],
     }
     return amp, times, meta
 
 
 # ---------------------------------------------------------------------------
-# WAV -> decisions
+# WAV -> 判决
 # ---------------------------------------------------------------------------
 
 def run_wav(
@@ -189,7 +182,7 @@ def run_wav(
     cfg: DetectorConfig | None = None,
     hw_f_max: float | None = None,
 ) -> dict:
-    """Run a recorded WAV through the full detection chain."""
+    """让一段录制的 WAV 走完整个检测链路。"""
     amp, times, meta = load_csi(
         path, fs=fs, probe=probe, carriers=carriers, hw_f_max=hw_f_max
     )
@@ -223,10 +216,10 @@ def run_wav(
 
 
 def summarise(frames: list[dict], meta: dict | None = None) -> dict:
-    """Metrics that do not need ground truth.
+    """无需真值的指标。
 
-    A real cabin has no labelled BPM, so unlike ``evaluate_frames`` this reports
-    what the detector decided and when -- not accuracy.
+    真实座舱没有带标注的 BPM，因此与 ``evaluate_frames`` 不同，这里报告的是
+    检测器判定了什么、在何时判定 —— 而不是准确率。
     """
     if not frames:
         return {"frames": 0, "detected": False}
@@ -287,7 +280,7 @@ def summarise(frames: list[dict], meta: dict | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# self-check: scenario -> WAV
+# 自检：场景 -> WAV
 # ---------------------------------------------------------------------------
 
 def _default_seed(key: str) -> int:
@@ -303,22 +296,20 @@ def render_wav(
     seed: int | None = None,
     hw_f_max: float | None = None,
 ) -> dict:
-    """Render a simulated scenario into a WAV that a real front end can read.
+    """把仿真场景渲染成真实前端可读取的 WAV。
 
-    The probe is convolved with the continuous-frequency CIR of the scene and
-    only the positive-frequency band is kept, which is exactly the analytic
-    channel model the simulator uses for its 24 carriers. Feeding the result
-    back through ``run_wav`` therefore tests the front end, not the scene.
+    探测信号与该场景连续频率的 CIR 相卷积，只保留正频率频带，这恰好就是仿真器
+    为其 24 个载波所使用的解析信道模型。因此把结果再经由 ``run_wav`` 回放，
+    检验的是前端，而不是场景。
 
-    ``snr_db`` is in-band SNR relative to the rendered signal RMS. The
-    simulator's own CSI noise is about 35 dB, so ~40 dB here is comparable.
+    ``snr_db`` 是相对于渲染信号 RMS 的带内 SNR。仿真器自身的 CSI 噪声约为
+    35 dB，因此这里约 40 dB 与之相当。
 
-    ``hw_f_max`` renders the capture as a band-limited driver would produce it:
-    the probe itself is narrowed, so no energy is wasted above the ceiling. That
-    is the *configured correctly* case. The *not configured* case -- a full-band
-    probe behind a low-passing driver -- is a different failure mode and worth
-    testing separately, because the dead carriers there inject noise rather than
-    simply vanish; ``SASPipeline`` catches it at runtime by pruning.
+    ``hw_f_max`` 会让渲染出的采集如同带限驱动器所产生的那样：探测信号本身被收
+    窄，因此上限之上不会浪费能量。那是*配置正确*的情形。*未配置*的情形 ——
+    全频带探测信号经过一个低通驱动器 —— 是另一种失效模式，值得单独测试，
+    因为那里的死载波注入的是噪声，而不只是消失；``SASPipeline`` 会在运行时
+    通过裁剪捕获它。
     """
     scenario = get_scenario(key)
     band = plan_band(hw_f_max)
@@ -340,9 +331,8 @@ def render_wav(
         H = (
             gains[:, None] * np.exp(-1j * 2 * np.pi * freqs[None, :] * delays[:, None])
         ).sum(axis=0)
-        # keep the positive band only and mirror it, so the waveform is real and
-        # its CFR on f > 0 is H exactly (a complex path gain is not a real
-        # signal, so re-symmetrising is what makes it playable)
+        # 只保留正频带并镜像，使波形为实数，且其在 f > 0 处的 CFR 精确等于 H
+        #（复路径增益不是实信号，重新对称化才能让它可播放）
         full = np.zeros(L, dtype=complex)
         full[: L // 2 + 1] = (spectrum * H)[: L // 2 + 1]
         full[L // 2 + 1:] = np.conj(full[L // 2 - 1: 0: -1])

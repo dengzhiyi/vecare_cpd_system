@@ -1,16 +1,13 @@
-"""Bandwidth-limited hardware: carrier planning, health gating, safe degradation.
+"""带宽受限硬件：载波规划、健康门控、安全降级。
 
-The paper assumes 10.5-23.5 kHz. Real drivers are often 18 kHz and sometimes
-16 kHz, and the failure is not graceful: a carrier above the rolloff has almost
-no probe power, so spectral division returns noise divided by noise. Those
-carriers do not merely add error -- they inject a wideband random amplitude
-sequence that residual energy reads as motion and MRC weights read as
-correlation. Measured on an empty cabin with the paper band and an 18 kHz
-driver, that produced a confirmed presence at 17.6 s.
+论文假设 10.5-23.5 kHz 的频带。真实驱动器常常是 18 kHz，有时只有 16 kHz，
+而且失效并不温和：滚降之上的载波几乎没有探测功率，于是谱除法返回的是噪声除以
+噪声。那些载波不仅带来误差 —— 它们注入一段宽带随机幅度序列，残差能量把它
+当作运动，MRC 权重把它当作相关性。在空车厢上实测，使用论文频带配 18 kHz
+驱动器，曾在 17.6 s 产生一次已确认的存在判定。
 
-These tests pin down both halves of the answer: plan the band from the hardware
-so the dead carriers never exist, and keep a runtime check for when the
-datasheet is wrong.
+这些测试把答案的两半都固定下来：依据硬件规划频带，使死载波根本不存在；
+同时保留一道运行时检查，以应对数据手册不准的情况。
 """
 import numpy as np
 import pytest
@@ -36,7 +33,7 @@ from core.replay import export_probe, render_wav, run_wav
 
 
 # ---------------------------------------------------------------------------
-# planning
+# 规划
 # ---------------------------------------------------------------------------
 
 def test_full_band_is_unchanged_when_no_ceiling_is_given():
@@ -47,12 +44,11 @@ def test_full_band_is_unchanged_when_no_ceiling_is_given():
 
 
 def test_low_edge_never_moves_with_the_ceiling():
-    """Every driver here is a 10 kHz high-pass: only the top of the band is planned.
+    """这里的每个驱动器都是 10 kHz 高通：只规划频带的上边界。
 
-    A band that shrank from both ends would change which physical paths the
-    average covers between two runs, and the breathing ACF calibration assumes a
-    fixed noise floor. So the low edge is pinned, and it must stay clear of the
-    10 kHz high-pass corner.
+    如果频带从两端同时收缩，两次运行之间它所平均的物理路径就会改变，而呼吸 ACF
+    的标定假定噪声底固定。因此低端边界被钉住，且必须与 10 kHz 高通拐点保持
+    距离。
     """
     for hw in (None, 20_000, 18_000, 16_000, 14_000):
         band = plan_band(hw)
@@ -62,7 +58,7 @@ def test_low_edge_never_moves_with_the_ceiling():
 
 
 def test_declared_ceiling_is_never_sounded():
-    """Carriers must stay HW_GUARD_HZ below the ceiling, not on it."""
+    """载波必须比上限低 HW_GUARD_HZ，而不是落在上限上。"""
     for hw in (20_000, 18_000, 16_000):
         band = plan_band(hw)
         assert band.f_hi <= hw - HW_GUARD_HZ + 1e-9
@@ -70,13 +66,13 @@ def test_declared_ceiling_is_never_sounded():
 
 
 def test_narrow_band_keeps_diversity_and_drops_carrier_count():
-    """Trade count for spacing, not spacing for count."""
+    """用数量换间距，而不是用间距换数量。"""
     wide, mid, narrow = plan_band(None), plan_band(18_000), plan_band(16_000)
     assert wide.n_carriers == 24 and mid.n_carriers == 24
     assert narrow.n_carriers < mid.n_carriers
     for band in (wide, mid, narrow):
         assert band.spacing_hz >= CARRIER_MIN_SPACING_HZ - 1e-9
-        # fringes must rotate between neighbours, or they are not independent
+        # 干涉条纹必须在相邻载波之间旋转，否则它们就不独立
         assert band.diversity >= 1.0, band.describe()
 
 
@@ -86,34 +82,34 @@ def test_impossible_band_is_rejected_loudly():
 
 
 def test_carriers_snap_onto_the_probe_grid_for_every_ceiling():
-    """Off-grid carriers interpolate a quantity that oscillates: 10 % error."""
+    """不在网格上的载波要插值一个不断振荡的量：10 % 误差。"""
     for hw in (None, 18_000, 16_000):
         probe = make_probe(hw_f_max=hw)
         carriers = carrier_bins(probe)
         df = probe.fs / probe.length
         residual = np.abs(carriers / df - np.round(carriers / df))
         assert residual.max() < 1e-9
-        # and the probe must actually have power there
+        # 并且探测信号在那里必须确实有功率
         assert probe_condition_db(probe, carriers).min() > -12.0
 
 
 def test_probe_stops_at_the_hardware_ceiling():
-    """Sounding above the driver wastes period energy on unheard frequencies."""
+    """在驱动器上限之上发声，会把周期能量浪费在没人听的频率上。"""
     wide, narrow = make_probe(), make_probe(hw_f_max=16_000)
     spec_w = np.abs(np.fft.fft(wide.samples))
     spec_n = np.abs(np.fft.fft(narrow.samples))
     df = wide.fs / wide.length
     k18 = int(round(18_000 / df))
-    # the wide probe still excites 18 kHz; the narrow one is 50 dB down there
+    # 宽频带探测信号在 18 kHz 处仍有激励；窄频带探测信号在那里低 50 dB
     assert spec_w[k18] > 0.5 * spec_w.max()
     assert spec_n[k18] < 1e-2 * spec_n.max()
-    # and the narrow probe must be strong everywhere it does place carriers
+    # 并且窄频带探测信号在所有实际放置载波处都必须足够强
     carriers = carrier_bins(narrow)
     assert probe_condition_db(narrow, carriers).min() > -3.0
 
 
 # ---------------------------------------------------------------------------
-# runtime health gating
+# 运行时健康门控
 # ---------------------------------------------------------------------------
 
 def _bandlimited(path_in, path_out, fc, order=6):
@@ -135,22 +131,22 @@ def test_health_flags_dead_carriers_and_keeps_live_ones(tmp_path):
     alive, rel, threshold = carrier_health(amp[:200])
     freqs = carrier_bins(probe)
 
-    # well below the cutoff every carrier survives; well above it none do.
-    # (Between them, a carrier can also die from a multipath null -- a real
-    # condition, not a bandwidth artefact, so that range is left unasserted.)
+    # 远低于截止频率处，每个载波都能存活；远高于截止频率处则一个都不剩。
+    #（在两者之间，载波也可能因多径零点而失效 —— 那是真实状况，而非带宽
+    # 伪影，因此该区间不做断言。）
     below = freqs < 12_000
-    above = freqs > 20_500   # a 6th-order 18 kHz rolloff is only -3 dB at 18k
+    above = freqs > 20_500   # 6 阶 18 kHz 滚降在 18k 处才 -3 dB
     assert alive[below].all(), f"false kill below cutoff: {rel[below]}"
     assert not alive[above].any(), f"dead carriers kept: {rel[above]}"
     assert 0.0 < threshold < 1.0
 
 
 def test_pruning_survives_half_the_band_being_dead():
-    """The baseline must not be the median -- once half the band dies the
-    median has already moved into the dead carriers and prunes nothing."""
+    """基线绝不能是均值 —— 一旦频带一半已死，均值就已经移入死载波之中，
+    什么都裁剪不掉。"""
     rng = np.random.default_rng(0)
     live = np.abs(1.0 + 0.02 * rng.standard_normal((400, 12)))
-    dead = np.abs(0.01 * rng.standard_normal((400, 12)))   # noise/noise
+    dead = np.abs(0.01 * rng.standard_normal((400, 12)))   # 噪声/噪声
     alive, rel, threshold = carrier_health(np.hstack([live, dead]))
     assert alive[:12].sum() >= 10
     assert alive[12:].sum() == 0, f"threshold {threshold:.3f}, dead rel {rel[12:].round(3)}"
@@ -164,12 +160,12 @@ def test_all_dead_band_is_not_silently_pruned_to_nothing():
 
 
 # ---------------------------------------------------------------------------
-# end-to-end degradation
+# 端到端降级
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("hw", [18_000, 16_000])
 def test_narrow_hardware_keeps_a_quiet_cabin_quiet(tmp_path, hw):
-    """The whole point: a door slam must not become a child."""
+    """核心要点：一次关门不能被判定成儿童。"""
     path = tmp_path / "stress.wav"
     render_wav(path, "stress", snr_db=35.0, hw_f_max=hw)
     metrics = run_wav(path, hw_f_max=hw)["metrics"]
@@ -184,13 +180,13 @@ def test_narrow_hardware_still_sees_a_breathing_child(tmp_path, hw):
     metrics = run_wav(path, hw_f_max=hw)["metrics"]
     assert metrics["detected"]
     assert metrics["bpm_median"] == pytest.approx(18.0, abs=1.5)
-    # the response budget starts at the first evidence, not at confirmation
+    # 响应预算从首个证据起算，而不是从确认时刻起算
     assert 9.5 <= metrics["response_time_s"] <= 11.0
 
 
 def test_unplanned_band_is_caught_by_runtime_pruning(tmp_path):
-    """A full-band probe behind an 18 kHz driver: the design is wrong, but the
-    front end must not turn a quiet cabin into an alarm on its own."""
+    """18 kHz 驱动器背后放全频带探测信号：设计是错的，但前端本身绝不能
+    把一个安静的车厢变成告警。"""
     src = tmp_path / "empty.wav"
     render_wav(src, "empty", duration_s=26.0, snr_db=35.0)
     limited = _bandlimited(src, tmp_path / "lp18.wav", 18_000)
@@ -215,11 +211,10 @@ def test_exported_probe_matches_the_declared_ceiling(tmp_path):
 
 
 def test_ui_offers_exactly_the_bands_the_planner_accepts():
-    """The chips must never be able to request a band plan_band would reject.
+    """这些选项不能请求任何 plan_band 会拒绝的频带。
 
-    The UI reads the carrier counts from this payload rather than re-deriving
-    anything in the browser, so a drift here would put the numbers on screen out
-    of step with the numbers the DSP actually uses.
+    UI 从该返回数据中读取载波数量，而不是在浏览器里重新推导，因此这里一旦出现
+    偏差，屏幕上的数字就会与 DSP 实际使用的数字脱节。
     """
     from server import BAND_CHOICES, band_options
 

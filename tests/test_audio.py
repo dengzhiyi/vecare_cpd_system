@@ -1,8 +1,8 @@
-"""Real-audio front end: probe design, WAV I/O, CSI recovery, WAV replay.
+"""真实音频前端：探测信号设计、WAV 读写、CSI 恢复、WAV 回放。
 
-These tests are what makes a real capture trustworthy. Without them the audio
-path is a pile of plausible-looking DSP: every failure mode (wrong taper, wrong
-frame sync, wrong interpolation) still produces a number.
+正是这些测试让一次真实采集变得可信。没有它们，音频链路就只是一堆看起来
+合理的 DSP：每一种失效模式（渐变错误、帧同步错误、插值错误）都仍会产出一个
+数值。
 """
 import numpy as np
 import pytest
@@ -22,7 +22,7 @@ from core.replay import export_probe, load_csi, render_wav, run_wav
 
 
 def _render_frame(probe, delays, gains):
-    """One probe period carrying a known CIR, as the microphone would record it."""
+    """麦克风会录到的一个探测周期，其中携带着已知的 CIR。"""
     L, fs = probe.length, probe.fs
     spectrum = np.fft.fft(probe.samples)
     freqs = np.fft.fftfreq(L, 1.0 / fs)
@@ -34,7 +34,7 @@ def _render_frame(probe, delays, gains):
 
 
 # ---------------------------------------------------------------------------
-# probe
+# 探测信号
 # ---------------------------------------------------------------------------
 
 def test_probe_period_is_one_csi_frame():
@@ -44,7 +44,7 @@ def test_probe_period_is_one_csi_frame():
 
 
 def test_probe_illuminates_every_carrier():
-    """A sweep that starts on the band edge loses 23 dB on the outer carriers."""
+    """若扫频从频带边缘开始，外侧载波会损失 23 dB。"""
     probe = make_probe()
     db = probe_condition_db(probe, carrier_bins(probe))
     assert db.min() > -6.0, f"weakest carrier at {db.min():.1f} dB"
@@ -56,7 +56,7 @@ def test_probe_refuses_a_sample_rate_below_the_sweep():
 
 
 def test_carrier_bins_sit_on_the_dft_grid():
-    """Off-grid carriers cannot be estimated exactly, only interpolated."""
+    """不在网格上的载波无法被精确估计，只能插值。"""
     probe = make_probe()
     carriers = carrier_bins(probe)
     assert carriers.size == N_SUBCARRIERS
@@ -66,7 +66,7 @@ def test_carrier_bins_sit_on_the_dft_grid():
 
 
 # ---------------------------------------------------------------------------
-# CSI recovery
+# CSI 恢复
 # ---------------------------------------------------------------------------
 
 def test_csi_estimate_recovers_known_channel_exactly():
@@ -81,7 +81,7 @@ def test_csi_estimate_recovers_known_channel_exactly():
     )
     cfr, _ = estimate_csi(x, probe, carriers, starts=np.array([0]))
     error = np.abs(np.abs(cfr[0]) - expected) / expected
-    # noiseless: spectral division is exact, so anything above rounding is a bug
+    # 无噪声：谱除法是精确的，因此任何超过舍入误差的结果都是 bug
     assert error.max() < 1e-4, f"max relative error {error.max():.2e}"
 
 
@@ -103,18 +103,18 @@ def test_csi_estimate_matches_the_analytic_cfr_at_modest_snr():
 
 
 def test_frame_sync_fills_a_dropped_period():
-    """A missed matched-filter peak must not stretch the time base."""
+    """丢失的匹配滤波峰绝不能拉伸时间基准。"""
     probe = make_probe()
     reps = 20
     stream = np.tile(probe.samples, reps)
-    stream[9 * probe.length:10 * probe.length] = 0.0   # simulate a dropout
+    stream[9 * probe.length:10 * probe.length] = 0.0   # 模拟一次丢帧
 
     starts, stats = frame_offsets(stream, probe)
     assert stats["filled"] == 1
     assert stats["holes"] == 0
     assert stats["period_samples"] == probe.length
-    # the first and last periods are never matched-filter peaks (no neighbour),
-    # so 20 reps yield 18 frame starts -- but the grid must stay uniform
+    # 第一个和最后一个周期永远不会成为匹配滤波峰（没有相邻周期），
+    # 因此 20 次重复只产生 18 个帧起始位置 —— 但网格必须保持均匀
     assert starts.size == reps - 2
     assert np.all(np.diff(starts) == probe.length)
 
@@ -123,7 +123,7 @@ def test_frame_sync_reports_a_long_hole_instead_of_stretching():
     probe = make_probe()
     reps = 20
     stream = np.tile(probe.samples, reps)
-    stream[8 * probe.length:14 * probe.length] = 0.0   # 6 missing frames
+    stream[8 * probe.length:14 * probe.length] = 0.0   # 缺失 6 帧
 
     _, stats = frame_offsets(stream, probe, max_fill=4)
     assert stats["holes"] == 1
@@ -131,7 +131,7 @@ def test_frame_sync_reports_a_long_hole_instead_of_stretching():
 
 
 # ---------------------------------------------------------------------------
-# WAV I/O
+# WAV 读写
 # ---------------------------------------------------------------------------
 
 def test_wav_roundtrip_keeps_the_waveform(tmp_path):
@@ -167,11 +167,11 @@ def test_recording_without_the_probe_raises_a_clear_error(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# end to end: scenario -> WAV -> decisions
+# 端到端：场景 -> WAV -> 判决
 # ---------------------------------------------------------------------------
 
 def test_rendered_wav_reproduces_the_simulator_verdict(tmp_path):
-    """The whole point of the audio path: same scene, same decision."""
+    """音频链路的全部意义所在：同一场景，同一判决。"""
     path = tmp_path / "sleeping.wav"
     render_wav(path, "sleeping", duration_s=32.0, snr_db=40.0)
 
@@ -186,7 +186,7 @@ def test_rendered_wav_reproduces_the_simulator_verdict(tmp_path):
     assert metrics["alarm_at"] is not None
     assert metrics["response_time_s"] is not None
     assert metrics["response_time_s"] <= 10.2
-    assert 15.0 <= metrics["bpm_median"] <= 21.0     # truth is 18 BPM
+    assert 15.0 <= metrics["bpm_median"] <= 21.0     # 真值为 18 BPM
 
 
 def test_quiet_rendered_wav_does_not_alarm(tmp_path):
@@ -198,13 +198,11 @@ def test_quiet_rendered_wav_does_not_alarm(tmp_path):
 
 
 def test_breathing_rate_survives_a_quiet_recording(tmp_path):
-    """A low-noise cabin is the hard case, not a noisy one.
+    """低噪声车厢才是困难情形，而不是嘈杂的车厢。
 
-    With a lower noise floor, the chest excursion's own detrend residual is
-    several times the floor, so the motion gate latches on; if breathing were
-    muted whenever motion is flagged, a *better* recording would report *less*
-    breathing. Verified at 60 dB SNR here because the simulator's own 35 dB
-    hides the failure.
+    噪声底更低时，胸腔起伏自身的去趋势残差已是噪声底的好几倍，于是运动门控会
+    被置位；如果只要运动被标记就把呼吸静音，那么*更干净*的录音反而会报告*更少*
+    的呼吸。这里在 60 dB SNR 下验证，因为仿真器自身的 35 dB 会掩盖这一失效。
     """
     path = tmp_path / "quiet.wav"
     render_wav(path, "sleeping", duration_s=30.0, snr_db=60.0)
@@ -219,8 +217,8 @@ def test_csi_amplitude_wrapper_agrees_with_estimate_csi():
     x = _render_frame(probe, np.array([0.001, 0.004]), np.array([1.0, 0.3j]))
     amp, times, cfr = csi_amplitude(np.tile(x, 4), probe)
     assert amp.shape == (3, N_SUBCARRIERS)
-    # the matched filter locks onto the first arriving path, so frame starts sit
-    # a constant offset inside each period -- harmless, |H(f)| is invariant to it
+    # 匹配滤波器锁定最先到达的路径，因此帧起始位置在每个周期内都带有一个
+    # 固定偏移 —— 这没有影响，|H(f)| 对其不变
     assert np.allclose(np.diff(times), probe.period_s)
     assert 0.0 <= times[0] < probe.period_s
     assert np.allclose(amp, np.abs(cfr))
