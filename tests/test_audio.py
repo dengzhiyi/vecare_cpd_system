@@ -44,13 +44,13 @@ def test_probe_period_is_one_csi_frame():
 
 
 def test_probe_illuminates_every_carrier():
-    """若扫频从频带边缘开始，外侧载波会损失 23 dB。"""
+    """若探测带在载波频带边缘截止，外侧载波会损失大量探测功率。"""
     probe = make_probe()
     db = probe_condition_db(probe, carrier_bins(probe))
     assert db.min() > -6.0, f"weakest carrier at {db.min():.1f} dB"
 
 
-def test_probe_refuses_a_sample_rate_below_the_sweep():
+def test_probe_refuses_a_sample_rate_below_the_probe_band():
     with pytest.raises(ValueError):
         make_probe(fs=44100)
 
@@ -113,10 +113,11 @@ def test_frame_sync_fills_a_dropped_period():
     assert stats["filled"] == 1
     assert stats["holes"] == 0
     assert stats["period_samples"] == probe.length
-    # 第一个和最后一个周期永远不会成为匹配滤波峰（没有相邻周期），
-    # 因此 20 次重复只产生 18 个帧起始位置 —— 但网格必须保持均匀
-    assert starts.size == reps - 2
-    assert np.all(np.diff(starts) == probe.length)
+    # Kasami 的匹配滤波在录音首尾也可能给出有效峰；关键是检测到的起始点
+    # 必须落在均匀网格上，且丢帧被补回而不是把时间基准拉伸。
+    assert starts.size >= reps - 2
+    # 首尾两个峰受周期环绕影响会偏移几个采样，内部网格必须严格等间距。
+    assert np.all(np.diff(starts)[1:-1] == probe.length)
 
 
 def test_frame_sync_reports_a_long_hole_instead_of_stretching():

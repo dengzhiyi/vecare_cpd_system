@@ -69,8 +69,8 @@ def export_probe(
     录音时必须同时播放探测信号；没有它就没有 CSI 可估计，只有语音和路噪。
 
     ``hw_f_max`` 是扬声器 + 麦克风实测的 -3 dB 上限。在该上限之上发声并非没有
-    代价：扫频会把周期能量花在驱动器无法重现的频率上，于是每个*实际使用*的
-    载波都会变得更嘈杂。传入真实上限，扫频就会收缩以适配。
+    代价：探测音会把周期能量花在驱动器无法重现的频率上，于是每个*实际使用*的
+    载波都会变得更嘈杂。传入真实上限，Kasami 探测带就会收缩以适配。
     """
     probe = make_probe(fs=fs, hw_f_max=hw_f_max)
     reps = max(1, int(round(seconds * probe.csi_fs)))
@@ -122,11 +122,11 @@ def load_csi(
 
     probe = probe or make_probe(fs=native_fs)
     starts, sync = frame_offsets(x, probe, min_ratio=min_peak_ratio)
-    if starts.size < 2 or sync["match_ratio"] < 8.0:
+    if starts.size < 2 or sync["match_ratio"] < 9.0:
         raise RuntimeError(
             f"{Path(path).name}: no probe repetition found "
-            f"(correlation peak/floor {sync['match_ratio']:.1f}, need >= 8; a "
-            f"recording that contains the probe scores around 24). The probe "
+            f"(correlation peak/floor {sync['match_ratio']:.1f}, need >= 9; a "
+            f"recording that contains the Kasami probe scores around 12–18). The probe "
             f"must be playing during the recording, at its original "
             f"{probe.period_s*1000:.1f} ms period -- no resampling, no tempo "
             f"change, no noise suppression. Run "

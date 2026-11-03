@@ -59,7 +59,7 @@ class SimulationEngine:
         self._wall_anchor = 0.0
         self._finalized = True
         self.summary: dict | None = None
-        self.calibration: dict | None = calib.load_empty_calibration()
+        self.calibration: dict | None = calib.load_empty_calibration(source="simulation")
 
     # ------------------------------------------------------------------
     # 控制
@@ -94,7 +94,9 @@ class SimulationEngine:
             cfg = DetectorConfig(sensitivity=sensitivity)
             # 有空车标定且载波数与本次频带一致时直接加载；否则检测器从开机
             # 第一帧起做 2 s 自适应背景估计，不再等待 5 s 安静期。
-            profile = calib.load_empty_calibration(band.n_carriers)
+            # 仿真器只加载仿真来源的基线；真实录音基线的绝对幅度尺度不同，
+            # 混用会把能量比整体放大或缩小。载波数不匹配时同样回退冷启动。
+            profile = calib.load_empty_calibration(band.n_carriers, source="simulation")
             self.pipeline = SASPipeline(cfg, background=profile)
             session_id = self._new_session_id(scenario.key)
             if seed is None:
@@ -324,8 +326,20 @@ class SimulationEngine:
             return {"available": True, "profile": self.calibration}
 
     def calibration_status(self) -> dict:
+        """返回磁盘上的基线与仿真可用性。
+
+        仿真监测只接受 ``source="simulation"`` 的基线；实录音基线（绝对幅度
+        尺度不同）会被列出但不加载。
+        """
         with self.lock:
-            return {"available": self.calibration is not None, "profile": self.calibration}
+            stored = calib.load_empty_calibration()
+            usable = calib.load_empty_calibration(source="simulation")
+            return {
+                "available": usable is not None,
+                "profile": usable,
+                "stored": stored,
+                "stored_source": None if stored is None else stored.get("source", "simulation"),
+            }
 
     def clear_calibration(self) -> dict:
         with self.lock:

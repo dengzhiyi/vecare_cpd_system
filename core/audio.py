@@ -8,8 +8,10 @@
 
 为什么数值能对得上：探测信号每 20 ms 重复一次，而 48 000 Hz / 50 Hz = 960 个
 采样，因此一个 960 采样的探测周期恰好每秒产生 50 个 CSI 帧 —— 这正是 SAS 模型
-所定义的帧率。960 不是 Kasami 长度（后者为 2^n - 1），所以默认探测信号是一个
-带限线性 chirp；当用户选择匹配的周期时，也可以使用 MLS 探测信号。
+所定义的帧率。默认探测信号是 Kasami 序列：把 255 位 Kasami 码扩频到 20 ms，
+再搬移到载波频带中心。20 ms 内不是 2^n - 1 个采样（960 ≠ 1023），所以这里用
+**码片扩频**而不是逐采样序列：Kasami 码的码率约 12.75 kHz，经过带限与载波
+均衡后仍保持 50 Hz CSI 帧率。线性 chirp 与 MLS 模式保留用于对比和回归。
 
 关于帧对齐的说明：由于探测信号是周期的，在任意偏移处截取一个 L 采样的窗，
 得到的都是同一周期循环移位后的结果。移位 delta 个采样会使 H(f) 乘以
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import wave
 from dataclasses import dataclass
+from functools import lru_cache
 from math import gcd
 from pathlib import Path
 
@@ -80,25 +83,117 @@ class Probe:
         return float(np.dot(self.samples, self.samples))
 
 
+def _mls_sequence(order: int, taps: list[int]) -> np.ndarray:
+    """生成长度 2^n-1 的 m 序列（0/1），Kasami 码的原料。"""
+    length = 2 ** order - 1
+    reg = np.ones(order, dtype=np.int8)
+    out = np.empty(length, dtype=np.int8)
+    for i in range(length):
+        out[i] = reg[-1]
+        fb = 0
+        for t in taps:
+            fb ^= reg[-t]
+        reg[1:] = reg[:-1]
+        reg[0] = fb
+    return out
+
+
+def _kasami_codes(order: int = 8) -> list[np.ndarray]:
+    """构造 Kasami 小集合：a 与 b 的循环移位异或。
+
+    n 为偶数时，用抽因子 ``q = 2^(n/2)+1`` 从 m 序列得到短周期 b，再与 a
+    异或，得到 ``2^(n/2)`` 条互相关有界的序列。order=8 时长度为 255。
+    """
+    if order % 2 or order not in _MLS_TAPS:
+        raise ValueError(f"Kasami needs an even order in {sorted(_MLS_TAPS)}")
+    a = _mls_sequence(order, _MLS_TAPS[order])
+    n = a.size
+    dec = a[(np.arange(n) * (2 ** (order // 2) + 1)) % n]
+    period = next(
+        p for p in range(1, n + 1)
+        if n % p == 0 and np.all(dec == np.tile(dec[:p], n // p))
+    )
+    b = np.tile(dec[:period], n // period)
+    return [a ^ np.roll(b, shift) for shift in range(period)]
+
+
+def _bandlimit(samples: np.ndarray, fs: float, f_lo: float, f_hi: float) -> np.ndarray:
+    """在频域做余弦边缘的带通，保留周期性、避免时域滤波的边沿瞬态。"""
+    spectrum = np.fft.rfft(samples)
+    freqs = np.fft.rfftfreq(samples.size, 1.0 / fs)
+    transition = 200.0
+    lo, hi = f_lo - transition, f_hi + transition
+    mask = ((freqs >= lo) & (freqs <= hi)).astype(float)
+    rise = (freqs > lo - transition) & (freqs < lo)
+    fall = (freqs > hi) & (freqs < hi + transition)
+    mask[rise] = 0.5 - 0.5 * np.cos(np.pi * (freqs[rise] - (lo - transition)) / transition)
+    mask[fall] = 0.5 + 0.5 * np.cos(np.pi * (freqs[fall] - hi) / transition)
+    return np.fft.irfft(spectrum * mask, samples.size)
+
+
+@lru_cache(maxsize=16)
+def _kasami_waveform(fs: int, length: int, f_lo: float, f_hi: float, n_carriers: int) -> np.ndarray:
+    """把 Kasami 码扩频、搬移到载波频带，并均衡各载波的探测功率。"""
+    codes = _kasami_codes(8)
+    oversample = 4
+    high_fs = fs * oversample
+    high_len = length * oversample
+    n = np.arange(high_len)
+    fc = 0.5 * (f_lo + f_hi)
+    best: np.ndarray | None = None
+    best_rms = -1.0
+
+    for code in codes:
+        chips = code[(n * code.size) // high_len].astype(np.float64) * 2.0 - 1.0
+        s = chips * np.cos(2 * np.pi * fc * n / high_fs)
+        s = _bandlimit(s, high_fs, f_lo, f_hi)
+        # 带限后每 4 个采样取平均，等价于一个短低通 + 抽取，输出仍为 20 ms。
+        s = s.reshape(length, oversample).mean(axis=1)
+
+        # 在探测信号自身的 DFT 网格上把各载波拉平。Kasami 码的频谱起伏可达
+        # 10 dB 以上；不均衡时最弱载波会退化成噪声计。
+        spectrum = np.fft.rfft(s)
+        spacing = fs / length
+        bins = np.round(
+            (f_lo + np.arange(n_carriers) * (f_hi - f_lo) / max(1, n_carriers - 1)) / spacing
+        ).astype(int)
+        bins = np.unique(bins[(bins > 0) & (bins < spectrum.size)])
+        mag = np.abs(spectrum[bins])
+        target = float(np.median(mag))
+        spectrum[bins] *= np.clip(target / (mag + 1e-12), 0.25, 12.0)
+        s = np.fft.irfft(spectrum, length)
+
+        peak = float(np.max(np.abs(s)))
+        if peak <= 0:
+            continue
+        s /= peak
+        rms = float(np.sqrt(np.mean(s ** 2)))
+        # 峰值归一化后 RMS 越高，PAPR 越低；选最“温和”的一条 Kasami 码。
+        if rms > best_rms:
+            best_rms, best = rms, s
+
+    if best is None:
+        raise ValueError("could not build a Kasami probe for this band")
+    return best
+
+
 def make_probe(
     fs: int = AUDIO_FS,
     period_s: float = DEFAULT_PERIOD_S,
-    kind: str = "chirp",
+    kind: str = "kasami",
     taper_s: float = PROBE_TAPER_S,
     hw_f_max: float | None = None,
 ) -> Probe:
     """构造周期性探测信号。
 
-    ``chirp``（默认）是覆盖载波频带、并在两侧留有余量的线性扫频。``mls`` 是
-    最大长度序列，也是构造 Kasami 码的原料 —— 只有当 fs * period_s 恰好等于
-    2^n - 1 时才可用；对本流水线所需的 20 ms 周期（48 kHz 下 960 个采样）而言
-    并非如此，因此扫频是唯一能保持 50 Hz CSI 帧率的选择。
+    ``kasami``（默认）把 255 位 Kasami 码扩频到 20 ms，再搬移到载波频带中心，
+    并在 DFT 网格上均衡各载波功率。码片扩频让 960 采样的周期也能使用
+    2^n-1 长度的 Kasami 码，同时保持 50 Hz CSI 帧率。``chirp`` 是带限线性
+    扫频，``mls`` 是逐采样最大长度序列 —— 后两者保留用于对比与回归。
 
-    扫频范围的重要性体现在两方面。如果扫频*起止*于载波频带，两端的渐变段就会
-    正好落在最外侧的载波上，使它们的探测功率下降 23 dB，并比其余载波噪声大
-    200 倍；700 Hz 的外延可把带内功率差异控制在约 3 dB 以内。此外，当硬件上限
-    低于论文的 23.5 kHz 时，扫频也必须在那里停止 —— 探测驱动器无法重现的频带
-    只会把周期能量浪费在没人测量的频率上，从而降低所有实际使用载波的 SNR。
+    探测频带必须覆盖载波并留有余量：若激励起止于载波频带，两端的载波会损失
+    探测功率。Kasami 模式先带限到 ``f_lo-f_hi``，再在载波网格上拉平；因此
+    带宽收缩时只有实际使用的载波被均衡，不会把能量浪费在驱动器上限之外。
 
     ``hw_f_max`` 是扬声器 + 麦克风实测的 -3 dB 上限。传入它，频带就会收缩以适配；
     不传则假定采用论文的 23.5 kHz。
@@ -107,6 +202,17 @@ def make_probe(
     length = int(round(fs * period_s))
     if length < 32:
         raise ValueError("probe period too short for this sample rate")
+
+    if kind == "kasami":
+        if band.f_hi + 400.0 >= fs / 2:
+            raise ValueError(
+                f"probe band reaches {band.f_hi:.0f} Hz but the Nyquist "
+                f"limit at fs={fs} is {fs/2:.0f} Hz; record at 48 kHz or higher"
+            )
+        s = _kasami_waveform(
+            int(fs), int(length), float(band.f_lo), float(band.f_hi), int(band.n_carriers)
+        ).copy()
+        return Probe(samples=s, fs=int(fs), kind=kind, band=band)
 
     if kind == "chirp":
         if band.sweep_hi >= fs / 2:
@@ -123,21 +229,11 @@ def make_probe(
         if 2 ** order - 1 != length or order not in _MLS_TAPS:
             raise ValueError(
                 f"MLS probe needs a period of 2^n-1 samples; {length} is not. "
-                f"Use a chirp, or pick period_s = {(2 ** 10 - 1) / fs:.6f} "
+                f"Use a Kasami probe, or pick period_s = {(2 ** 10 - 1) / fs:.6f} "
                 f"(MLS order 10) and account for the resulting "
                 f"{fs / (2 ** 10 - 1):.3f} Hz CSI rate."
             )
-        taps = _MLS_TAPS[order]
-        reg = np.ones(order, dtype=np.int8)
-        out = np.empty(length, dtype=np.int8)
-        for i in range(length):
-            out[i] = reg[-1]
-            fb = 0
-            for t in taps:
-                fb ^= reg[-t]
-            reg[1:] = reg[:-1]
-            reg[0] = fb
-        s = out.astype(np.float64) * 2.0 - 1.0
+        s = _mls_sequence(order, _MLS_TAPS[order]).astype(np.float64) * 2.0 - 1.0
     else:
         raise ValueError(f"unknown probe kind: {kind!r}")
 
@@ -227,17 +323,17 @@ def matched_filter(x: np.ndarray, probe: Probe) -> np.ndarray:
 
 
 def match_quality(mf: np.ndarray) -> float:
-    """探测检测统计量：匹配滤波的峰值与 RMS 之比。
+    """探测检测统计量：匹配滤波峰值与稳健底噪之比。
 
-    对真实探测信号的约 960 个采样做相关，峰值约比底噪高
-    ``sqrt(length / correlation_width)`` 倍 —— 实测约 24。对宽带噪声做相关，
-    得到的只是一个没有这种增益的滤波噪声过程，即约 4。这一差距足够大，可以用作
-    硬门限：它能把“录音里有探测信号”与“有人录了一段座舱”区分开来。
+    Kasami 是宽带编码信号，其匹配滤波底噪不是高斯的；用全局 RMS 会被周期性
+    峰本身抬高，噪声录音也能拿到 4–5。这里改用中位数绝对偏差（MAD）作为
+    稳健底噪：含探测信号的录音约为 12–18，纯噪声约为 8，门限可稳定放在 9。
     """
     if mf.size == 0:
         return 0.0
-    rms = float(np.sqrt(np.mean(mf ** 2)))
-    return float(np.max(mf)) / rms if rms > 0 else 0.0
+    med = float(np.median(mf))
+    sigma = float(np.median(np.abs(mf - med))) * 1.4826
+    return float(np.max(mf)) / sigma if sigma > 0 else 0.0
 
 
 def frame_starts(x: np.ndarray, probe: Probe, min_ratio: float = 0.2) -> np.ndarray:

@@ -204,7 +204,7 @@ footer{
     它和实录音频最终都会变成同一个 24×50 Hz 的 CSI 振幅矩阵，之后的每一行代码完全相同。
   </p>
   <div class="chips">
-    <span class="chip"><b>64</b> 项测试通过</span>
+    <span class="chip"><b>66</b> 项测试通过</span>
     <span class="chip"><b>7</b> 个验证场景</span>
     <span class="chip">响应 <b>10.0</b> s</span>
     <span class="chip">CSI <b>24 × 50 Hz</b></span>
@@ -252,7 +252,7 @@ footer{
       <g>
         <rect x="680" y="16" width="280" height="92" rx="10" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
         <text x="820" y="52" text-anchor="middle" font-size="17" font-weight="500" fill="#16181d">③ 实录录音</text>
-        <text x="820" y="78" text-anchor="middle" font-size="13" fill="#6b7382">麦克风 + 循环探测音</text>
+        <text x="820" y="78" text-anchor="middle" font-size="13" fill="#6b7382">麦克风 + 循环 Kasami 探测音</text>
       </g>
 
       <g>
@@ -318,7 +318,7 @@ footer{
   <p class="sec-sub">一句话：仿真是在电脑里“造”一段座舱声音；录音是拿真实扬声器和麦克风“录”一段。两者最后喂给同一套检测算法，区别只在声音从哪来。</p>
 
   <h3>A.1 先理解原理</h3>
-  <p>扬声器循环播放一段人耳几乎听不到的高频扫频声，麦克风同时听到“直达声 + 车内反射声”。有人呼吸或轻微移动时，反射路径会变化，接收到的“声学指纹”（CSI）随之起伏；系统从这些起伏判断：<b>有没有人、有没有呼吸、是否持续不动</b>。</p>
+  <p>扬声器循环播放一段人耳几乎听不到的 Kasami 探测音（20 ms 一周期），麦克风同时听到“直达声 + 车内反射声”。有人呼吸或轻微移动时，反射路径会变化，接收到的“声学指纹”（CSI）随之起伏；系统从这些起伏判断：<b>有没有人、有没有呼吸、是否持续不动</b>。</p>
 
   <h3>A.2 仿真验证：不用任何硬件</h3>
   <p>适合先确认“算法和界面是否正常”。打开 <span class="mono">http://127.0.0.1:8090</span>，四步即可：</p>
@@ -346,15 +346,15 @@ footer{
 
   <p>也可以用命令行批量核对：</p>
   <div class="code">python3 replay_audio.py --selfcheck   <span class="c"># 仿真 → WAV → 再回放，验证音频前端</span>
-python3 -m pytest tests -q            <span class="c"># 64 项自动测试</span></div>
+python3 -m pytest tests -q            <span class="c"># 66 项自动测试</span></div>
 
   <div class="note"><b>仿真的特点：</b>完全可控、可重复、16× 加速，几分钟就能跑完几个场景；缺点是声音模型理想化，没有真实混响、扬声器失真和复杂人际干扰。</div>
 
   <h3>A.3 录音验证：需要真实扬声器 + 麦克风</h3>
-  <p>目标不是“录一段车内声音”，而是<b>一边播放探测音、一边把声音录回来</b>。没有探测音，系统拿不到 CSI。</p>
+  <p>目标不是“录一段车内声音”，而是<b>一边播放 Kasami 探测音、一边把声音录回来</b>。没有 Kasami 探测音，系统拿不到 CSI。</p>
   <ol class="steps">
     <li><b>准备硬件：</b>车载音响或宽频音箱（尽量覆盖 14–20 kHz）；采样率 ≥ 48 kHz、频响 ≥ 24 kHz 的麦克风；麦克风固定，不要手持。</li>
-    <li><b>生成探测音并循环播放：</b>用下面的命令生成 <span class="mono">probe.wav</span>，在车内持续播放。</li>
+    <li><b>生成 Kasami 探测音并循环播放：</b>用下面的命令生成 <span class="mono">probe.wav</span>，在车内持续播放。</li>
     <li><b>不需要空车静置：</b>系统开机第一帧就监测。可以先在空车厢里执行一次标定并保存基线，之后每次启动直接加载；不做标定则用开机前约 2 s 自适应估计背景。</li>
     <li><b>录音 40–60 s：</b>用 Audacity 或手机专业录音 App，输出 48 kHz、16-bit PCM WAV；关闭降噪、回声消除和自动增益。</li>
     <li><b>分析并可选存档：</b>跑检测，或存成会话后到 Web UI「日志回放」查看。</li>
@@ -562,7 +562,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <tbody>
         <tr>
           <td><b>用时域相关估 CSI</b></td>
-          <td class="dim">CIR 被探测音自相关主瓣糊成 83 µs 方波，<span class="code-i">sinc(83µs × 23.5kHz)</span> 早过第一零点，高端载波幅度偏低几十个百分点</td>
+          <td class="dim">CIR 被 Kasami 自相关主瓣（一个 78 µs 码片）糊成方块，时域反卷积在多径旁瓣与高端载波上都留误差</td>
           <td class="dim">频域正则化除法 <span class="code-i">H=R·S*/（|S|²+ε）</span>，周期卷积在 DFT 网格上精确成立</td>
         </tr>
         <tr>
@@ -571,9 +571,9 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
           <td class="dim">取整频点。无噪误差降到 1e-6，40 dB 下 0.5%</td>
         </tr>
         <tr>
-          <td><b>扫频范围等于载波带宽</b></td>
-          <td class="dim">升余弦边缘正好压在最外侧载波上，探针功率 −23 dB，等效噪声放大 200 倍</td>
-          <td class="dim">扫频 9.8–23.9 kHz，比载波带各宽 700 Hz，带内平坦度 23 dB → 3 dB</td>
+          <td><b>探测带边缘压在最外侧载波上</b></td>
+          <td class="dim">Kasami 的带限过渡带正好落在最外侧载波，探针功率被削掉，该载波退化成噪声计</td>
+          <td class="dim">两侧各留 200 Hz 余量（10.3–23.7 kHz），再逐载波功率均衡，带内功率差 &lt; 3 dB</td>
         </tr>
       </tbody>
     </table>
@@ -592,7 +592,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 
   <div class="code"><span class="c"># 1. 单元测试，约 8 s</span>
 <span class="p">$</span> python -m pytest tests -q
-<span class="s">39 passed in 8.04s</span>
+<span class="s">66 passed in 19.62s</span>
 
 <span class="c"># 2. 七场景离线批跑（路径 A），约 30 s</span>
 <span class="p">$</span> python -c "from core.offline import run_offline; import core.scenarios as sc; [print(k, run_offline(k)['metrics']) for k in sc.SCENARIOS]"
@@ -644,7 +644,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 <!-- ============ 06 ============ -->
 <section id="audio">
   <div class="sec-head"><span class="num">06</span><h2>实采录音接入</h2></div>
-  <p class="sec-sub">四步：生成探测音 → 现场播放并录制 → 命令行判定 → 存成会话。检测代码一行不改，只把输入从「仿真信道」换成「你的 WAV」。</p>
+  <p class="sec-sub">四步：生成 Kasami 探测音 → 现场播放并录制 → 命令行判定 → 存成会话。检测代码一行不改，只把输入从「仿真信道」换成「你的 WAV」。</p>
 
   <figure>
     <svg width="100%" viewBox="0 0 1000 150" xmlns="http://www.w3.org/2000/svg" role="img">
@@ -662,8 +662,8 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       </g>
       <g>
         <rect x="16" y="28" width="168" height="78" rx="8" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
-        <text x="100" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">生成探测音</text>
-        <text x="100" y="83" text-anchor="middle" font-size="12" fill="#6b7382">20 ms 循环扫频</text>
+        <text x="100" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">生成 Kasami 探测音</text>
+        <text x="100" y="83" text-anchor="middle" font-size="12" fill="#6b7382">20 ms 循环码片</text>
       </g>
       <g>
         <rect x="216" y="28" width="168" height="78" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
@@ -693,15 +693,15 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
   </figure>
   <figcaption>步骤 01 和 02 在<b>现场</b>完成，03–05 在<b>电脑上</b>完成。前三格里任何一格做错，后面都不会给出有意义的结果——所以下面先讲清楚「怎么录」，再讲「怎么跑」。</figcaption>
 
-  <h3>① 生成探测音（只做一次）</h3>
+  <h3>① 生成 Kasami 探测音（只做一次）</h3>
 
-  <div class="code"><span class="c"># 48 kHz / 20 ms 一周期 / 9.8–23.9 kHz 线性扫频</span>
+  <div class="code"><span class="c"># 48 kHz / 20 ms 一周期 / 10.3–23.7 kHz / 255 位 Kasami 码片扩频</span>
 <span class="p">$</span> python replay_audio.py --emit-probe probe.wav --seconds 300
 
 <span class="c"># 60 s ≈ 5.8 MB，300 s ≈ 29 MB；循环播放即可，不要变速</span></div>
 
   <div class="note">
-    <b>这是主动探测，不是「录一段座舱里的声音」。</b>没有探测音，麦克风收到的只有语音和路噪，
+    <b>这是主动探测，不是「录一段座舱里的声音」。</b>没有 Kasami 探测音，麦克风收到的只有语音和路噪，
     里面不存在任何 CSI 可反演的东西，程序会直接拒绝（<span class="mono">no probe repetition found</span>）。
     探测音必须<b>循环播放</b>并<b>原速原采样率</b>输出，任何变速都会让 20 ms 栅格对不上。
   </div>
@@ -726,7 +726,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <div class="rn">1</div>
       <div>
         <h4>关掉所有音频前处理</h4>
-        <p>降噪、回声消除、AGC、波束成形，全部关闭。AGC 的人为幅度调制比呼吸引起的幅度变化大两个数量级；降噪会把 10 kHz 以上的探测音当噪声删掉。</p>
+        <p>降噪、回声消除、AGC、波束成形，全部关闭。AGC 的人为幅度调制比呼吸引起的幅度变化大两个数量级；降噪会把 10 kHz 以上的 Kasami 探测音当噪声删掉。</p>
       </div>
     </div>
     <div class="role">
@@ -747,7 +747,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <div class="rn">4</div>
       <div>
         <h4>播放与录音同采样率、同速率</h4>
-        <p>同一台设备最稳。跨设备允许缓慢漂移（帧同步按实测周期跟踪），但不能重采样或变速——慢放 8.8% 就会因相关度不足被拒。</p>
+        <p>同一台设备最稳。跨设备允许缓慢漂移（帧同步按实测周期跟踪），但不能重采样或变速——慢放 8.8% 就会因匹配质量不足被拒。</p>
       </div>
     </div>
     <div class="role">
@@ -768,7 +768,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <thead><tr><th style="width:110px">方面</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td><b>作用</b></td><td>得到背景残差能量 <span class="code-i">δ₀</span> 与子载波相干门限 <span class="code-i">θ_κ</span>，避免每次开机前 2 s 的冷启动估计被关门、人员走动或空调变化污染。同一车厢条件下确认更早，也不受当次开机瞬态影响。</td></tr>
-        <tr><td><b>方法</b></td><td>空车厢、关门关窗，空调/音响按常用档位；停止当前监测；点侧栏「执行空车标定」或调用 <span class="code-i">POST /api/calibration</span>。默认 5 s（允许 3–30 s），前 1 s 作 warmup 丢弃，实际用后 4 s 的 40 个决策帧。<span class="code-i">hw_f_max</span> 省略即论文频带。</td></tr>
+        <tr><td><b>方法</b></td><td>空车厢、关门关窗，空调/音响按常用档位；停止当前监测；点侧栏「执行空车标定」、调用 <span class="code-i">POST /api/calibration</span>，或运行 <span class="code-i">python3 -m core.calibration --simulate</span>（仿真）/ <span class="code-i">--wav capture.wav</span>（真实录音）。默认 5 s（允许 3–30 s），前 1 s 作 warmup 丢弃，实际用后 4 s 的 40 个决策帧。<span class="code-i">hw_f_max</span> 省略即论文频带。</td></tr>
         <tr><td><b>统计</b></td><td>能量取样本 p35；相干门限取 p25 + 5.5×MAD，并夹在 <span class="code-i">[0.115, 0.22]</span>。灵敏度旋钮仍在运行时按比例缩放运动阈值。</td></tr>
         <tr><td><b>产物与加载</b></td><td>写入 <span class="code-i">data/calibration/empty_cabin.json</span>（已 gitignore）；下次 <span class="code-i">/api/live/start</span> 自动加载。侧栏或 <span class="code-i">GET /api/calibration</span> 可查看数值。</td></tr>
         <tr><td><b>失效条件</b></td><td>换硬件频响上限（20k/18k/16k/14k）或换车后应重标。载波数不匹配时加载会自动回退到冷启动，不报错；监测运行中调用会返回 409。</td></tr>
@@ -776,9 +776,12 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
     </table>
   </div>
 
-  <div class="code"><span class="p">$</span> curl -X POST http://127.0.0.1:8090/api/calibration \
-       -H 'Content-Type: application/json' -d '{"duration_s":5}'
-<span class="c"># 成功则写出 data/calibration/empty_cabin.json；GET 查看，/api/calibration/clear 删除</span></div>
+  <div class="code"><span class="p">$</span> python3 -m core.calibration --simulate --seconds 5
+<span class="c"># 实采空车录音（录音时必须循环播放 Kasami 探测音），--start 跳过开机/关门瞬态</span>
+<span class="p">$</span> python3 -m core.calibration --wav capture.wav --seconds 5 --start 1 --hw-f-max 18000
+<span class="p">$</span> python3 -m core.calibration --show      <span class="c"># 查看</span>
+<span class="p">$</span> python3 -m core.calibration --clear     <span class="c"># 删除</span>
+<span class="c"># 也可走 HTTP：POST /api/calibration {"duration_s":5}；GET 查看，/api/calibration/clear 删除</span></div>
 
   <h3>为什么没有标定也能工作</h3>
 
@@ -787,7 +790,11 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
   <p>标定的价值是可复现：同一车队的基线固定，不受当次开机瞬态影响。实测活跃儿童加载标定后约 2.4 s 确认，冷启动约 9.0 s。所以“可选”仅指不阻断开机与检测，工程部署仍推荐做一次。</p>
 
   <div class="note">
-    <b>本样机的标定跑的是仿真 empty 场景，不是真实录音。</b>接实车时，用同样 5 s 的真实空车 CSI 替换这段数据源即可，统计口径与文件格式不变。
+    <b>两种数据源不能混用。</b>仿真基线（<span class="code-i">source: "simulation"</span>）与真实录音基线（<span class="code-i">source: "wav"</span>）的绝对幅度尺度不同：录音电平取决于播放与麦克风增益。因此仿真监测只加载仿真基线；检测到 WAV 基线时回退冷启动并在侧栏提示。
+  </div>
+
+  <div class="note">
+    <b>实采适配层已内置，不是“把 WAV 改名成 JSON”。</b>空车录音必须包含 Kasami 探测音，<span class="code-i">--wav</span> 会先由 <span class="code-i">core/replay.py</span> 转成每载波复幅度（50 Hz），再按同一套统计计算；带宽、载波数与前端配置要和运行时一致。样机默认仍用仿真 empty 场景。
   </div>
 
   <h3>③ 跑判定</h3>
@@ -831,18 +838,18 @@ MRC 有效子载波 19.19 / 24
       <tbody>
         <tr><td>峰值 0.9 → 0.0005（−66 dBFS）</td><td><span class="verdict ok">仍正常 · 18.5 BPM</span></td><td class="dim">幅度统计对整体增益不变，电平不是敏感项</td></tr>
         <tr><td>削波 5101 样本（约 0.3%）</td><td><span class="verdict care">仍检出 · 18.5 BPM</span></td><td class="dim">仿真能扛，但真实场景的谐波会落进带内污染幅度，别赌</td></tr>
-        <tr><td>播放设备低通 16 kHz</td><td><span class="verdict ok">仍检出 · 18.4 BPM</span></td><td class="dim">MRC 自动压低失效载波权重，这是它的正作用</td></tr>
-        <tr><td>播放设备低通 12 kHz</td><td><span class="verdict no">拒绝 · 相关度 7.4</span></td><td class="dim">24 个载波里失效太多，相关度低于阈值 8</td></tr>
-        <tr><td>探测音慢放 8.8%</td><td><span class="verdict no">拒绝 · 相关度 4.9</span></td><td class="dim">周期被拉长，20 ms 栅格对不上；正常录音约 24</td></tr>
+        <tr><td>播放设备低通 16 kHz</td><td><span class="verdict ok">仍检出 · 18.1 BPM</span></td><td class="dim">MRC 自动压低失效载波权重，24 路里只用 15 路</td></tr>
+        <tr><td>播放设备低通 12 kHz</td><td><span class="verdict care">仍检出 · 18.6 BPM</span></td><td class="dim">只剩 10.5–11.5 kHz 少数载波有能量，结果已不可靠，应换宽频扬声器</td></tr>
+        <tr><td>探测音慢放 8.8%</td><td><span class="verdict no">拒绝 · 匹配质量 6.4</span></td><td class="dim">周期被拉长，20 ms 栅格对不上；阈值 9，正常录音明显高于 9</td></tr>
         <tr><td>用 44.1 kHz 录制</td><td><span class="verdict no">拒绝 · 需 47 kHz</span></td><td class="dim">Nyquist 22.05 kHz &lt; 23.5 kHz 载波上限，报错里会写明</td></tr>
-        <tr><td>完全没播探测音</td><td><span class="verdict no">拒绝 · 未找到探测音</span></td><td class="dim">这是主动探测，被动监听拿不到 CSI</td></tr>
+        <tr><td>完全没播探测音</td><td><span class="verdict no">拒绝 · 匹配质量 8.3</span></td><td class="dim">纯噪声的稳健底噪很高，匹配质量低于阈值 9</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="note warn">
     <b>报「未找到探测音」时，按这个顺序查，不要调参数：</b>
-    ① 录音文件是不是真的包含探测音（用耳机听一遍，应该是持续的高频「嘶」声）；
+    ① 录音文件是不是真的包含 Kasami 探测音（用耳机听一遍，应该是持续的高频「嘶」声）；
     ② 播放有没有被变速或重采样（系统音效、会议软件、蓝牙链路都可能偷偷做）；
     ③ 播放设备低通是不是低于 16 kHz（通话耳麦常见）。
     这三种都属于输入不可用，调阈值没有任何用。
@@ -867,7 +874,7 @@ MRC 有效子载波 19.19 / 24
   <svg viewBox="0 0 680 316" width="100%" style="max-width:680px;font-family:inherit" role="img" aria-label="三种硬件带宽下的载波布局">
     <rect x="0" y="0" width="680" height="316" fill="#ffffff"/>
     <text x="24" y="22" font-size="13" font-weight="600" fill="#16181d">无限制（论文假设）</text>
-    <text x="24" y="39" font-size="11" fill="#6b7382">24 载波 · 565 Hz 间隔 · 扫频 9.8–23.9 kHz</text>
+    <text x="24" y="39" font-size="11" fill="#6b7382">24 载波 · 565 Hz 间隔 · Kasami 探测带 10.3–23.7 kHz</text>
     <rect x="66.1" y="46" width="547.7" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
     <rect x="630.7" y="46" width="25.3" height="26" rx="3" fill="#f4f5f7" stroke="#e4e7ec"/>
     <line x1="66.1" y1="51" x2="66.1" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
@@ -896,7 +903,7 @@ MRC 有效子载波 19.19 / 24
     <line x1="613.9" y1="51" x2="613.9" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
 
     <text x="24" y="126" font-size="13" font-weight="600" fill="#16181d">18 kHz 器件</text>
-    <text x="24" y="143" font-size="11" fill="#6b7382">24 载波 · 261 Hz 间隔 · 扫频 9.8–17.2 kHz</text>
+    <text x="24" y="143" font-size="11" fill="#6b7382">24 载波 · 261 Hz 间隔 · Kasami 探测带 10.3–16.7 kHz</text>
     <rect x="66.1" y="150" width="252.8" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
     <rect x="348.4" y="150" width="286.5" height="26" rx="3" fill="#fbeceb" stroke="#f0c9c6"/>
     <line x1="382.1" y1="144" x2="382.1" y2="182" stroke="#b3261e" stroke-width="1.5" stroke-dasharray="4 3"/>
@@ -927,7 +934,7 @@ MRC 有效子载波 19.19 / 24
     <line x1="318.9" y1="155" x2="318.9" y2="171" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
 
     <text x="24" y="230" font-size="13" font-weight="600" fill="#16181d">16 kHz 器件</text>
-    <text x="24" y="247" font-size="11" fill="#6b7382">17 载波 · 250 Hz 间隔 · 扫频 9.8–15.2 kHz</text>
+    <text x="24" y="247" font-size="11" fill="#6b7382">17 载波 · 250 Hz 间隔 · Kasami 探测带 10.3–14.7 kHz</text>
     <rect x="66.1" y="254" width="168.5" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
     <rect x="264.2" y="254" width="370.8" height="26" rx="3" fill="#fbeceb" stroke="#f0c9c6"/>
     <line x1="297.9" y1="248" x2="297.9" y2="286" stroke="#b3261e" stroke-width="1.5" stroke-dasharray="4 3"/>
@@ -952,7 +959,7 @@ MRC 有效子载波 19.19 / 24
 
     <text x="24" y="312" font-size="10" fill="#9aa3b0">青绿＝有效载波带　红色＝硬件滚降区（探针在此无能量，谱除法退化为噪声）</text>
   </svg>
-  <figcaption>载波带顶、载波数、扫频带顶三者一起随硬件上限收缩，<b>下限 10.5 kHz 不动</b>。18 kHz 仍能保住 24 路（6 kHz 带宽），16 kHz 只能降到 17 路——宁减载波数也不压间隔。</figcaption>
+  <figcaption>载波带顶、载波数、探测带顶三者一起随硬件上限收缩，<b>下限 10.5 kHz 不动</b>。18 kHz 仍能保住 24 路（6 kHz 带宽），16 kHz 只能降到 17 路——宁减载波数也不压间隔。</figcaption>
   </figure>
 
   <h3 style="font-size:15px;margin:26px 0 10px">实测：硬撑 23.5 kHz 的后果</h3>
@@ -985,7 +992,7 @@ MRC 有效子载波 19.19 / 24
         <li>载波带顶 = min(23.5 kHz, 上限 − <b>1.5 kHz</b>)，离滚降留余量</li>
         <li>下限固定 <b>10.5 kHz</b>：三个档位的高通都是 10 kHz，这 500 Hz 就是它的余量，只有顶部随硬件移动</li>
         <li>载波数 = 带宽 / <b>250 Hz</b> 封顶，保证相邻载波仍能去相关</li>
-        <li>扫频带随之收窄，不向发不出的频率送能量</li>
+        <li>探测带随之收窄，不向发不出的频率送能量</li>
         <li>低于 <b>12.75 kHz</b> 直接报错（不足 4 路载波）；UI / API 只提供 14 kHz 及以上档位</li>
       </ul>
     </div>
@@ -1030,7 +1037,7 @@ MRC 有效子载波 19.19 / 24
   <div class="code"><span class="c"># 已录的音频，按 16 kHz 硬件重新规划频带</span>
 python replay_audio.py capture.wav <span class="p">--hw-f-max</span> <span class="s">16000</span>
 
-<span class="c"># 探测音必须同步换，否则扫频仍在往发不出的频段送能量</span>
+<span class="c"># Kasami 探测音必须同步换，否则探测带仍在往发不出的频段送能量</span>
 python replay_audio.py --emit-probe probe16k.wav --seconds <span class="s">300</span> <span class="p">--hw-f-max</span> <span class="s">16000</span>
 
 <span class="c"># 在该带宽下跑全场景闭合自检</span>
@@ -1041,7 +1048,7 @@ python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class
   <div class="note warn">
     <b>先测硬件上限再配置，不要依赖兜底。</b>不传 <span class="mono">hw_f_max</span> 时运行时门控仍能消除误报，
     但载波是按 23.5 kHz 铺的，前端有效积分带宽被浪费，BPM 精度和运动灵敏度都吃亏。
-    测法：扫频播放 10–24 kHz 的啁啾，用被测麦克风录回来做频谱，看 −3 dB 点在哪。
+    测法：循环播放 Kasami 探测音（或 10–24 kHz 的宽带啁啾），用被测麦克风录回来做频谱，看 −3 dB 点在哪。
   </div>
 </section>
 
@@ -1079,11 +1086,11 @@ python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class
       <div class="pchips">
         <span class="pchip">CSI_FS <em>50 Hz</em></span>
         <span class="pchip">载波 <em>10.5–23.5 kHz</em></span>
-        <span class="pchip">扫频 <em>9.8–23.9 kHz</em></span>
-        <span class="pchip">taper <em>0.6 ms</em></span>
+        <span class="pchip">Kasami 探测带 <em>10.3–23.7 kHz</em></span>
+        <span class="pchip">码片 <em>78 µs</em></span>
         <span class="pchip">AUDIO_FS <em>48 kHz</em></span>
       </div>
-      <p>这些是设计约束，不是可调项：载波必须落在 DFT 网格上、扫频必须比载波带宽、采样率必须过 Nyquist。改错的表现是「怎么调阈值都不对」。</p>
+      <p>这些是设计约束，不是可调项：载波必须落在 DFT 网格上、探测带必须比载波带宽、采样率必须过 Nyquist。改错的表现是「怎么调阈值都不对」。</p>
     </div>
   </div>
 
@@ -1209,7 +1216,7 @@ python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 64 项<br>
+  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 66 项<br>
   代码位置：vecare_cpd_system（仓库根目录）　·　文档生成于 2026-11-03
 </footer>
 

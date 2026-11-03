@@ -4,8 +4,9 @@ from __future__ import annotations
 import pytest
 
 from core import calibration
-from core.config import DetectorConfig
+from core.config import DetectorConfig, plan_band
 from core.detector import CPDDetector
+from core.replay import render_wav
 from core.scenarios import SCENARIOS
 
 
@@ -105,6 +106,43 @@ def test_detector_loads_empty_calibration():
     assert det.background_source == "空车标定"
     assert abs(det.baseline_energy - 0.0142) < 1e-9
     assert abs(det.coherence_threshold - 0.142) < 1e-9
+
+
+def test_empty_calibration_from_wav(tmp_path, monkeypatch):
+    """实采适配层：空车 WAV -> CSI -> 同一套基线统计。"""
+    wav = tmp_path / "empty.wav"
+    render_wav(wav, key="empty", duration_s=6.0, snr_db=45.0)
+    profile_path = tmp_path / "empty_cabin.json"
+    monkeypatch.setattr(calibration, "CALIBRATION_DIR", tmp_path)
+    monkeypatch.setattr(calibration, "PROFILE_PATH", profile_path)
+
+    profile = calibration.calibrate_empty_cabin_from_wav(
+        wav, duration_s=4.0, start_s=1.0
+    )
+    assert profile["source"] == "wav"
+    assert profile["source_file"] == "empty.wav"
+    assert profile["samples"] >= 20
+    assert profile["n_carriers"] == plan_band().n_carriers
+    assert profile["baseline_energy"] > 0
+    assert profile["coherence_threshold"] >= 0.115
+    assert profile_path.exists()
+
+    loaded = calibration.load_empty_calibration(profile["n_carriers"])
+    assert loaded is not None and loaded["source"] == "wav"
+    # 不同来源的绝对幅度尺度不可比，仿真基线加载时必须拒绝实录音基线。
+    assert calibration.load_empty_calibration(profile["n_carriers"], source="simulation") is None
+    assert calibration.load_empty_calibration(profile["n_carriers"], source="wav") is not None
+
+
+def test_cli_show_and_clear(tmp_path, monkeypatch, capsys):
+    """命令行入口：查看与清除不需要加载音频前端。"""
+    monkeypatch.setattr(calibration, "CALIBRATION_DIR", tmp_path)
+    monkeypatch.setattr(calibration, "PROFILE_PATH", tmp_path / "empty_cabin.json")
+
+    assert calibration.main(["--show"]) == 0
+    assert "尚未标定" in capsys.readouterr().out
+    assert calibration.main(["--clear"]) == 0
+    assert "当前没有空车基线" in capsys.readouterr().out
 
 
 def test_child_scenarios_do_not_require_empty_entry():

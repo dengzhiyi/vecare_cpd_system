@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """真实音频路径的命令行入口。
 
-    # 1. 生成探测音（录音时必须播放它）
+    # 1. 生成 Kasami 探测音（录音时必须循环播放它）
     python replay_audio.py --emit-probe probe.wav --seconds 300
 
     # 2. 把已录好的音频跑一遍检测
@@ -17,8 +17,8 @@
     ``--selfcheck`` 把七个场景渲染成 ``data/selfcheck/*.wav``（已被 git 忽略）
     并回放它们；这是本项目唯一自行生成的 WAV，且每次运行都会重新生成。
     真实验证需要在 ``probe.wav`` 循环播放时，以 >= 48 kHz 录制一段
-    ``capture.wav``；仓库不附带任何真实座舱录音。没有探测音时，座舱录音
-    只包含语音/路噪，无法产生 CSI。
+    ``capture.wav``；仓库不附带任何真实座舱录音。没有 Kasami 探测音时，座舱
+    录音只包含语音/路噪，无法产生 CSI。
 """
 from __future__ import annotations
 
@@ -192,8 +192,10 @@ def main(argv: list[str] | None = None) -> int:
         epilog=__doc__,
     )
     ap.add_argument("audio", nargs="?", help="已录好的 WAV 文件")
-    ap.add_argument("--emit-probe", metavar="WAV", help="写出探测音，录音时循环播放")
-    ap.add_argument("--seconds", type=float, default=300.0, help="探测音时长（默认 300 s）")
+    ap.add_argument("--emit-probe", metavar="WAV",
+                    help="写出 Kasami 探测音，录音时循环播放")
+    ap.add_argument("--seconds", type=float, default=300.0,
+                    help="Kasami 探测音时长（默认 300 s）")
     ap.add_argument("--selfcheck", action="store_true", help="渲染全部场景并回放自检")
     ap.add_argument("--snr", type=float, default=35.0, help="自检渲染信噪比（默认 35 dB）")
     ap.add_argument("--out", default="data/selfcheck", help="自检输出目录")
@@ -212,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             "\n用法：把它循环播放给座舱，同时录麦克风。\n"
             "  · 采样率必须与录音一致（默认 48 kHz）\n"
             "  · 录音不能开降噪 / 回声消除 / 自动增益\n"
-            "  · 播放设备要能覆盖 9.8–23.9 kHz"
+            "  · 播放设备要能覆盖 10.3–23.7 kHz（窄带器件请传 --hw-f-max）"
         )
         return 0
 

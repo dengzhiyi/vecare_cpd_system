@@ -382,11 +382,17 @@ function syncControls() {
 function renderCalibration(cal) {
   if (!cal) return;
   const p = cal.profile;
+  const stored = cal.stored;
   if (p) {
-    $('calibrationState').textContent = `已标定 ${p.duration_s || 5} s`;
+    const sourceLabel = p.source === 'wav' ? '真实录音' : '仿真';
+    $('calibrationState').textContent = `已标定 ${p.duration_s || 5} s · ${sourceLabel}`;
     $('calibrationNote').textContent =
       `基线能量 ${Number(p.baseline_energy).toFixed(4)} · 相干门限 ` +
       `${Number(p.coherence_threshold).toFixed(3)} · ${p.n_carriers} 路载波`;
+  } else if (stored) {
+    $('calibrationState').textContent = '未用于仿真';
+    $('calibrationNote').textContent =
+      '检测到真实录音基线。它只适用于 WAV 回放/实车，仿真监测仍用冷启动自适应。';
   } else {
     $('calibrationState').textContent = '未标定';
     $('calibrationNote').textContent =

@@ -26,12 +26,13 @@ N_SUBCARRIERS = 24           # 上限，并非承诺值：窄带会用更少的�
 F_LOW = 10_500               # Hz，10 kHz 高通 + 500 Hz 保护带，从不参与规划
 F_HIGH = 23_500              # Hz，硬件允许时的设计上限
 
-# 探测信号刻意扫得比载波频带更宽，好让升余弦边缘（它必然损失能量）落在频带之外。
-# 如果扫频的起点和终点正好落在载波频带上，最外侧的两个载波只能获得 -23 dB 的
-# 探测功率，也就是比其余载波的噪声大 200 倍。
+# 探测信号刻意铺得比载波频带更宽，好让带限边缘（它必然损失能量）落在频带之外。
+# 如果探测带起止正好落在载波频带上，最外侧的两个载波只能获得很低的探测功率，
+# 相当于比其余载波的噪声大两个数量级。Kasami 模式在带限时两侧各外延 200 Hz
+# （见 SWEEP_MARGIN_HZ）；chirp 兼容模式沿用下面的 SWEEP_LO/SWEEP_HI。
 SWEEP_LO = 9_800             # Hz
 SWEEP_HI = 23_900            # Hz，对 fs = 48 kHz 必须保持在 Nyquist 频率以下
-PROBE_TAPER_S = 0.0006       # 0.6 ms；2 ms 的边缘会在频带两端损失 23 dB
+PROBE_TAPER_S = 0.0006       # chirp 兼容模式的 0.6 ms 边缘
 
 # --- 硬件带宽 ----------------------------------------------------------------
 # 扬声器和麦克风的频响从来不会平坦到 23.5 kHz。驱动器标称的 “18 kHz” 意味着
@@ -44,12 +45,12 @@ PROBE_TAPER_S = 0.0006       # 0.6 ms；2 ms 的边缘会在频带两端损失 2
 HW_F_MAX = None              # 实测的 -3 dB 上限；None = 假定为 F_HIGH
 HW_GUARD_HZ = 1_500          # 让载波比硬件上限低这么多
 CARRIER_MIN_SPACING_HZ = 250  # 频率分集下限，见 plan_band 的 docstring
-SWEEP_MARGIN_HZ = 700        # 扫频在载波频带两侧各外延的量
+SWEEP_MARGIN_HZ = 200       # Kasami 探测信号的带限在载波频带两侧各外延的量
 
 
 @dataclass(frozen=True)
 class AcousticBand:
-    """某一硬件上限下的一组载波，以及激励它们的扫频信号。"""
+    """某一硬件上限下的一组载波，以及激励它们的探测频带。"""
     f_lo: float
     f_hi: float
     n_carriers: int
@@ -78,7 +79,7 @@ class AcousticBand:
         return (
             f"{self.n_carriers} carriers @ {self.f_lo/1e3:.1f}-{self.f_hi/1e3:.1f} kHz "
             f"({self.spacing_hz:.0f} Hz spacing, diversity {self.diversity:.2f}), "
-            f"sweep {self.sweep_lo/1e3:.1f}-{self.sweep_hi/1e3:.1f} kHz"
+            f"probe band {self.sweep_lo/1e3:.1f}-{self.sweep_hi/1e3:.1f} kHz"
         )
 
 

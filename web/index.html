@@ -366,7 +366,7 @@
       <div class="about-grid">
         <div class="about-card">
           <h3>1 · 声学通道</h3>
-          <p>复用扬声器播放在 10 kHz 以上的线性 chirp 探测序列（可选 MLS），单麦克风以 48 kHz 采样；每 20 ms 估计一次 CSI，子载波数随硬件频带规划（最多 24 个）。</p>
+          <p>复用扬声器循环播放 20 ms 周期的 Kasami 探测音（255 位码片扩频，探测频带 10.3–23.7 kHz），单麦克风以 48 kHz 采样；每 20 ms 估计一次 CSI，子载波数随硬件频带规划（最多 24 个）。</p>
           <code>H(f,t) = Σ<sub>r</sub> a<sub>r</sub>(t) exp(−j2πfτ<sub>r</sub>(t)) + N(f,t)</code>
         </div>
         <div class="about-card">
