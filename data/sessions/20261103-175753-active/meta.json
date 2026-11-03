@@ -1,7 +1,7 @@
 {
-  "session_id": "20261103-001727-active",
+  "session_id": "20261103-175753-active",
   "app": "VeCare CPD 功能样机",
-  "started_at": "2026-11-03T00:17:27",
+  "started_at": "2026-11-03T17:57:53",
   "scenario": {
     "key": "active",
     "name": "清醒婴儿",
@@ -10,7 +10,7 @@
     "duration_s": 70,
     "category": "presence",
     "target": {
-      "enter_t": 9.0,
+      "enter_t": 0.0,
       "exit_t": null,
       "distance_m": 1.35,
       "bpm": 24.0,
@@ -18,13 +18,13 @@
       "reflectivity": 0.035,
       "breathing_windows": [
         [
-          9.0,
+          0.0,
           200.0
         ]
       ],
       "motion_events": [
         {
-          "t": 9.0,
+          "t": 0.0,
           "duration": 1.2,
           "amplitude_m": 0.18,
           "kind": "settle"
@@ -61,7 +61,7 @@
     "noise_bursts": [],
     "vibration_bursts": [],
     "ambient": "停车场 · 闭窗 · 空调关闭",
-    "expected": "运动快速确认存在；呼吸率随肢体间隙更新"
+    "expected": "开机即已存在；运动证据快速确认，呼吸率随肢体间隙更新"
   },
   "scenario_key": "active",
   "scenario_name": "清醒婴儿",
@@ -91,33 +91,37 @@
     "response_budget_s": 10.0,
     "apnea_timeout_s": 15.0,
     "clear_timeout_s": 25.0,
-    "calibration_s": 5.0,
+    "carrier_health_s": 5.0,
     "evidence_gap_reset_s": 5.0,
     "sensitivity": 1.0
   },
-  "speed": 8.0,
-  "seed": 1307867004,
+  "background": {
+    "source": "冷启动自适应",
+    "profile_created_at": null
+  },
+  "speed": 16.0,
+  "seed": 511741281,
   "status": "completed",
-  "ended_at": "2026-11-03T00:17:35",
+  "ended_at": "2026-11-03T17:57:58",
   "sim_time_s": 70.0,
   "frames": 691,
   "events": 5,
   "summary": {
     "detected": true,
-    "presence_at": 14.38,
+    "presence_at": 9.08,
     "confirmed_by": "breathing",
-    "detection_latency_s": 5.38,
-    "breathing_at": 13.28,
-    "alarm_at": 20.68,
-    "alarm_latency_s": 11.68,
+    "detection_latency_s": 9.08,
+    "breathing_at": 7.58,
+    "alarm_at": 17.58,
+    "alarm_latency_s": 17.58,
     "response_time_s": 10.0,
     "alarm_reason": "PRESENCE",
     "apnea_escalated_at": null,
-    "bpm_mae": 1.854,
-    "bpm_samples": 568,
+    "bpm_mae": 1.662,
+    "bpm_samples": 625,
     "false_presence_frames": 0,
-    "motion_evidence_frames": 65,
-    "mrc_neff": 21.62,
+    "motion_evidence_frames": 9,
+    "mrc_neff": 21.66,
     "interference_frames": 0,
     "frames": 691,
     "duration_s": 69.98

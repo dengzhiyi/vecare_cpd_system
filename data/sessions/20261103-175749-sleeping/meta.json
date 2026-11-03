@@ -1,7 +1,7 @@
 {
-  "session_id": "20261103-001708-sleeping",
+  "session_id": "20261103-175749-sleeping",
   "app": "VeCare CPD 功能样机",
-  "started_at": "2026-11-03T00:17:08",
+  "started_at": "2026-11-03T17:57:49",
   "scenario": {
     "key": "sleeping",
     "name": "入睡婴儿",
@@ -10,7 +10,7 @@
     "duration_s": 65,
     "category": "presence",
     "target": {
-      "enter_t": 9.0,
+      "enter_t": 0.0,
       "exit_t": null,
       "distance_m": 1.55,
       "bpm": 18.0,
@@ -18,13 +18,13 @@
       "reflectivity": 0.03,
       "breathing_windows": [
         [
-          9.0,
+          0.0,
           200.0
         ]
       ],
       "motion_events": [
         {
-          "t": 9.0,
+          "t": 0.0,
           "duration": 1.0,
           "amplitude_m": 0.16,
           "kind": "settle"
@@ -37,7 +37,7 @@
     "noise_bursts": [],
     "vibration_bursts": [],
     "ambient": "停车场 · 闭窗 · 空调关闭",
-    "expected": "约 9 s 出现，呼吸检测确认后 10 s 内告警"
+    "expected": "开机时儿童已在车内且无空车基线；确认后 10 s 内告警"
   },
   "scenario_key": "sleeping",
   "scenario_name": "入睡婴儿",
@@ -67,33 +67,37 @@
     "response_budget_s": 10.0,
     "apnea_timeout_s": 15.0,
     "clear_timeout_s": 25.0,
-    "calibration_s": 5.0,
+    "carrier_health_s": 5.0,
     "evidence_gap_reset_s": 5.0,
     "sensitivity": 1.0
   },
-  "speed": 8.0,
-  "seed": 305204539,
+  "background": {
+    "source": "冷启动自适应",
+    "profile_created_at": null
+  },
+  "speed": 16.0,
+  "seed": 537069747,
   "status": "completed",
-  "ended_at": "2026-11-03T00:17:17",
+  "ended_at": "2026-11-03T17:57:53",
   "sim_time_s": 65.0,
   "frames": 641,
   "events": 5,
   "summary": {
     "detected": true,
-    "presence_at": 15.58,
+    "presence_at": 9.08,
     "confirmed_by": "breathing",
-    "detection_latency_s": 6.58,
-    "breathing_at": 14.08,
-    "alarm_at": 20.18,
-    "alarm_latency_s": 11.18,
+    "detection_latency_s": 9.08,
+    "breathing_at": 7.58,
+    "alarm_at": 17.58,
+    "alarm_latency_s": 17.58,
     "response_time_s": 10.0,
     "alarm_reason": "PRESENCE",
     "apnea_escalated_at": null,
     "bpm_mae": 0.273,
-    "bpm_samples": 510,
+    "bpm_samples": 575,
     "false_presence_frames": 0,
-    "motion_evidence_frames": 1,
-    "mrc_neff": 21.41,
+    "motion_evidence_frames": 0,
+    "mrc_neff": 22.06,
     "interference_frames": 0,
     "frames": 641,
     "duration_s": 64.98

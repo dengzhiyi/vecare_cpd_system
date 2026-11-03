@@ -124,6 +124,7 @@ function bindUI() {
   $('startBtn').addEventListener('click', startMonitor);
   $('pauseBtn').addEventListener('click', togglePause);
   $('stopBtn').addEventListener('click', stopMonitor);
+  $('calibrateBtn').addEventListener('click', calibrateEmpty);
   $('ackBtn').addEventListener('click', acknowledge);
 
   $('bandChips').addEventListener('click', (e) => {
@@ -367,11 +368,57 @@ function syncControls() {
   $('pauseBtn').disabled = !running;
   $('pauseBtn').textContent = paused ? '继续' : '暂停';
   $('stopBtn').disabled = !running;
+  $('calibrateBtn').disabled = running;
   $('sensitivity').disabled = running;
   $('scenarioList').classList.toggle('locked', running);
   $('bandChips').classList.toggle('locked', running);
   $('sessionId').textContent = st.session_id || '—';
   renderBandRun(st);
+  renderCalibration(st.calibration);
+}
+
+/* 空车标定状态：GET /api/calibration 返回基线文件内容。
+   已标定时显示采集时长与基线能量；未标定时明确说明冷启动自适应。 */
+function renderCalibration(cal) {
+  if (!cal) return;
+  const p = cal.profile;
+  if (p) {
+    $('calibrationState').textContent = `已标定 ${p.duration_s || 5} s`;
+    $('calibrationNote').textContent =
+      `基线能量 ${Number(p.baseline_energy).toFixed(4)} · 相干门限 ` +
+      `${Number(p.coherence_threshold).toFixed(3)} · ${p.n_carriers} 路载波`;
+  } else {
+    $('calibrationState').textContent = '未标定';
+    $('calibrationNote').textContent =
+      '未标定时从开机第一帧起自适应估计背景，不要求先静置 5 s。';
+  }
+}
+
+/* 执行空车标定：POST /api/calibration {duration_s, hw_f_max}。
+   后端在空车场景下离线跑 5 s 仿真并写 data/calibration/empty_cabin.json；
+   完成后下一次监测启动会自动加载这份基线。 */
+async function calibrateEmpty() {
+  if (S.live.status && S.live.status.running) {
+    toast('请先停止当前监测，再执行空车标定');
+    return;
+  }
+  const btn = $('calibrateBtn');
+  btn.disabled = true;
+  btn.textContent = '标定中…';
+  try {
+    const data = await api('/api/calibration', {
+      method: 'POST',
+      body: JSON.stringify({ duration_s: 5, hw_f_max: S.hwFMax })
+    });
+    renderCalibration(data);
+    toast('空车标定完成，下次启动将加载该基线');
+    await loadSessions();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.textContent = '执行空车标定';
+    btn.disabled = !! (S.live.status && S.live.status.running);
+  }
 }
 
 function renderBandRun(st) {
@@ -446,11 +493,6 @@ function stateMeta(state, det, last, opts) {
   const t = last ? last.t : (det ? det.t : 0);
   const presenceFor = det && det.presence_since != null && last ? Math.max(0, last.t - det.presence_since) : null;
   switch (state) {
-    case 'CALIBRATING':
-      return {
-        label: '背景校准中', cls: 'calibrating',
-        sub: '正在采集安静车厢的背景声学基线，建立自适应运动阈值…',
-      };
     case 'PRESENCE': {
       const extra = presenceFor != null ? `已持续 ${fmt1(presenceFor)} s` : '存在证据持续';
       const left = det && det.countdown != null ? `，${fmt1(det.countdown)} s 后触发告警` : '';
@@ -532,12 +574,12 @@ function renderHero(det, last, opts) {
   $('countdownBar').style.background = det && det.alarm
     ? 'linear-gradient(90deg, #ff6070, #ff9a6b)' : 'linear-gradient(90deg, #f2b35c, #ffca7a)';
 
-  const calibrating = state === 'CALIBRATING';
+  const bootstrapping = !!(det && !det.calibrated);
   const progress = det ? det.calibration_progress || 0 : 0;
-  $('calibBar').style.width = calibrating ? `${progress * 100}%` : (det ? '100%' : '0%');
-  $('calibText').textContent = calibrating
-    ? `背景校准 ${(progress * 100).toFixed(0)}%`
-    : (det && !det.calibrated ? '等待校准' : (det ? `背景基线已建立 · 运动阈值 ${fmt2(det.motion_threshold)}` : '背景噪声校准'));
+  $('calibBar').style.width = bootstrapping ? `${progress * 100}%` : (det ? '100%' : '0%');
+  $('calibText').textContent = bootstrapping
+    ? `冷启动背景估计 ${(progress * 100).toFixed(0)}%`
+    : (det ? `背景基线已建立（${det.background_source}）· 运动阈值 ${fmt2(det.motion_threshold)}` : '背景噪声基线');
 }
 
 function renderCabin(det, opts) {

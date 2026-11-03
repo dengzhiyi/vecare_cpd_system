@@ -58,6 +58,8 @@
         运行期间每 320 ms 调 GET /api/live?since=&session= 增量拉取决策帧。
         暂停 / 改倍速 / 停止分别调用 /api/live/pause、/api/live/speed、
         /api/live/stop；告警确认调用 /api/live/ack。
+        空车标定调用 POST /api/calibration，基线写入
+        data/calibration/empty_cabin.json；未标定时检测器冷启动自适应。
       -->
       <section class="card control-card" id="liveControls">
         <div class="card-head">
@@ -88,6 +90,16 @@
             <button class="chip" data-speed="8">8×</button>
             <button class="chip" data-speed="16">16×</button>
           </div>
+        </div>
+
+        <div class="field">
+          <label>空车标定 <output id="calibrationState">读取中…</output></label>
+          <div class="actions">
+            <button id="calibrateBtn" class="btn ghost">执行空车标定</button>
+          </div>
+          <p id="calibrationNote" class="scenario-note">
+            未标定时从开机第一帧起自适应估计背景，不要求先静置 5 s。
+          </p>
         </div>
 
         <div class="actions">
@@ -378,9 +390,8 @@
         <div class="about-card">
           <h3>状态机与告警</h3>
           <ul class="about-list">
-            <li><b>CALIBRATING</b> 5 s 背景校准，自适应运动阈值 = max(下限, 中位数 + 3.5×MAD)</li>
-            <li><b>MONITORING</b> 无存在证据，持续监测</li>
-            <li><b>PRESENCE</b> 证据占比超过 30%，确认存在；10 s 预算自首个证据起算</li>
+            <li><b>MONITORING</b> 开机即监测；无空车标定时用前约 2 s 自适应背景（能量取 p10、相干取 p25），之后冻结</li>
+            <li><b>PRESENCE</b> 证据占比超过 30% 且至少积累 1.5 s 观测，确认存在；10 s 预算自首个证据起算，确认后锚点冻结</li>
             <li><b>ALARM</b> 超时未确认触发存在告警；已确认存在后 15 s 无呼吸升级为 APNEA 告警</li>
             <li><b>ACKED</b> 用户静音，但存在状态保持，直至证据消失 25 s</li>
           </ul>

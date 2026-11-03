@@ -18,10 +18,9 @@ from __future__ import annotations
 from collections import deque
 import numpy as np
 
-from .config import DetectorConfig
+from .config import DECISION_FS, DetectorConfig
 
 STATE_LABELS = {
-    "CALIBRATING": "背景校准",
     "MONITORING": "监测中 · 无儿童",
     "PRESENCE": "检测到儿童",
     "ALARM": "告警",
@@ -30,16 +29,20 @@ STATE_LABELS = {
 
 
 class CPDDetector:
-    def __init__(self, cfg: DetectorConfig):
+    def __init__(self, cfg: DetectorConfig, background: dict | None = None):
         self.cfg = cfg
-        self.state = "CALIBRATING"
+        # 冷启动即进入监测，不再要求开机后先安静 5 s。
+        self.state = "MONITORING"
         self.calibrated = False
-        self.calib_values: list[float] = []
-        self.calib_coherence: list[float] = []
+        self.background_source = "冷启动自适应"
+        self._bg_energy: deque = deque(maxlen=20)
+        self._bg_coherence: deque = deque(maxlen=20)
         self.baseline_energy: float | None = None
         self.motion_threshold = cfg.motion_ratio_floor()
         self.coherence_threshold = cfg.motion_coherence_min
         self.coherence_spread = 0.0
+        if background:
+            self.install_background(0.0, background)
 
         self.motion_ratio = 1.0
         self.motion_coherence = 0.0
@@ -87,34 +90,45 @@ class CPDDetector:
             message or f"{STATE_LABELS.get(old, old)} → {STATE_LABELS.get(new_state, new_state)}",
         )
 
-    def calibrate(self, t: float, energy: float, coherence: float) -> None:
-        self.calib_values.append(float(energy))
-        self.calib_coherence.append(float(coherence))
-        if t >= self.cfg.calibration_s and len(self.calib_values) >= 20:
-            vals = np.asarray(self.calib_values, dtype=float)
-            med = float(np.median(vals))
-            mad = float(np.median(np.abs(vals - med))) * 1.4826
-            # 背景电平加上一个小的保护带，使安静的车厢舒适地落在 ratio = 1 以下。
-            self.baseline_energy = max(med + 0.5 * mad, 1e-6)
-            # 相干性门限必须随载波数量缩放，而不能固定在安静窗中位数之上的
-            # 某个常量偏移。由 N 个载波估计出的秩 1 能量占比，其零假设期望约为
-            # 1/N，且离散程度随 N 减小而增大，因此一旦频带收窄，固定的 +0.015
-            # 几乎留不下余量：实测在 17 个载波时，安静窗中位数为 0.113
-            #（24 个载波时为 0.087），+0.015 的门限为 0.128，而持续噪声的峰值
-            # 为 0.129 —— 一次关门被确认为儿童。中位数 + 5.5 倍稳健 sigma 则能
-            # 跟随离散程度：在 24 个载波时它仍落在 0.115（绝对下限不变），
-            # 在 17 个载波时升到 0.142，既高于噪声峰值（0.124），而最弱的真实
-            # 运动帧（0.185）仍远高于它。
-            coh_vals = np.asarray(self.calib_coherence, dtype=float)
-            coh = float(np.median(coh_vals))
-            coh_mad = float(np.median(np.abs(coh_vals - coh))) * 1.4826
-            self.coherence_threshold = min(
-                0.22, max(self.cfg.motion_coherence_min, coh + 5.5 * coh_mad)
-            )
-            self.coherence_spread = coh_mad
-            self.motion_threshold = self.cfg.motion_ratio_floor()
+    def install_background(self, t: float, profile: dict) -> None:
+        """加载空车标定基线，冻结自适应估计。"""
+        self.baseline_energy = max(float(profile["baseline_energy"]), 1e-9)
+        self.coherence_threshold = float(profile.get(
+            "coherence_threshold", self.cfg.motion_coherence_min
+        ))
+        self.coherence_spread = float(profile.get("coherence_spread", 0.0))
+        self.background_source = "空车标定"
+        self.calibrated = True
+        if t > 0:
+            self._event(t, "calibration", "已加载空车标定基线")
+
+    def _update_background(self, t: float, energy: float, coherence: float) -> None:
+        """冷启动背景估计：无空车基线时用开机短窗的低分位残差。
+
+        只使用约 2 s 的样本：它刚好看得见一个运动窗内的安静间隙，又不足以把
+        儿童持续的呼吸起伏吸收进背景。估计完成后即冻结；若座舱环境发生长期
+        变化，应重新执行空车标定，而不是在线慢慢“学”成背景。
+        """
+        if self.interference or self.presence or self.calibrated:
+            return
+        self._bg_energy.append(float(energy))
+        self._bg_coherence.append(float(coherence))
+        vals = np.asarray(self._bg_energy, dtype=float)
+        # 低分位而非中位数：开机时儿童可能正在动，噪声底由短窗内最安静的
+        # 10% 帧代表；若取 25% 分位，一次 1 s 的落座动作就会把分母抬高约 30%，
+        # 使后续真实肢体运动擦着 1.6 倍门限漏掉。
+        self.baseline_energy = max(float(np.percentile(vals, 10)), 1e-9)
+        coh_vals = np.asarray(self._bg_coherence, dtype=float)
+        # 相干性同样取低分位，避免把运动期的高相干值写进背景门限。
+        coh = float(np.percentile(coh_vals, 25))
+        coh_mad = float(np.median(np.abs(coh_vals - coh))) * 1.4826
+        self.coherence_threshold = min(
+            0.22, max(self.cfg.motion_coherence_min, coh + 5.5 * coh_mad)
+        )
+        self.coherence_spread = coh_mad
+        if len(self._bg_energy) >= 20:
             self.calibrated = True
-            self._set_state(t, "MONITORING", "背景校准完成")
+            self._event(t, "calibration", "冷启动背景已建立（自适应，无需空车静置）")
 
     def _breath_lag_is_stable(self, breath: dict) -> bool:
         """这个呼吸峰与最近的几个峰一致吗？
@@ -140,11 +154,10 @@ class CPDDetector:
         self.motion_coherence = coherence
         self.interference = bool(motion.get("interference", False))
 
-        if not self.calibrated:
-            self.calibrate(t, energy, coherence)
-            return self.snapshot(t)
+        if self.background_source == "冷启动自适应":
+            self._update_background(t, energy, coherence)
 
-        base = self.baseline_energy or 1e-6
+        base = self.baseline_energy or max(energy, 1e-9)
         ratio = energy / base
         self.motion_ratio = ratio
         motion_det = bool(
@@ -209,15 +222,30 @@ class CPDDetector:
         if motion_det:
             self.last_motion_t = t
         if evidence:
-            # 新的一段证据会重新开始计算响应预算。
-            if (
-                self.last_evidence_t is None
-                or t - self.last_evidence_t > self.cfg.evidence_gap_reset_s
+            # 响应预算锚定在“当前这段证据”的起点。未确认存在前，长间隔会
+            # 开启新的一段证据并重置预算；一旦确认存在，锚点就冻结 —— 否则
+            # 后续每次短暂运动都会把预算往后推，端到端响应时间就会突破 10 s。
+            if self.first_evidence_t is None:
+                self.first_evidence_t = t
+            elif (
+                not self.presence
+                and self.last_evidence_t is not None
+                and t - self.last_evidence_t > self.cfg.evidence_gap_reset_s
             ):
                 self.first_evidence_t = t
             self.last_evidence_t = t
 
-        if not self.presence and self.presence_score >= self.cfg.presence_ratio:
+        # 确认存在需要足够的观测样本：5 s 窗的 30 % 至少是 1.5 s（15 个判决帧）。
+        # 少了这个下限，开机头几帧里只要有 1 帧噪声触发运动判据，就会让
+        # “1/2 = 50 %” 的占比成立，从而过早锁存存在。
+        min_evidence_samples = max(
+            1, int(round(self.cfg.evidence_window_s * DECISION_FS * self.cfg.presence_ratio))
+        )
+        if (
+            not self.presence
+            and len(self.evidence) >= min_evidence_samples
+            and self.presence_score >= self.cfg.presence_ratio
+        ):
             self.presence = True
             self.presence_since = t
             self.breath_source = "motion" if motion_det else "breathing"
@@ -291,9 +319,7 @@ class CPDDetector:
         self._event(t, "alarm", message)
 
     def _refresh_state(self, t: float) -> None:
-        if not self.calibrated:
-            self._set_state(t, "CALIBRATING")
-        elif self.alarm and not self.acknowledged:
+        if self.alarm and not self.acknowledged:
             self._set_state(t, "ALARM")
         elif self.alarm and self.acknowledged:
             self._set_state(t, "ACKED")
@@ -323,9 +349,11 @@ class CPDDetector:
         return {
             "state": self.state,
             "calibrated": self.calibrated,
-            "calibration_progress": float(
-                min(1.0, t / self.cfg.calibration_s) if not self.calibrated else 1.0
-            ),
+            "background_source": self.background_source,
+            "baseline_energy": None if self.baseline_energy is None
+            else round(float(self.baseline_energy), 5),
+            "calibration_progress": 1.0 if self.calibrated
+            else min(1.0, len(self._bg_energy) / 20.0),
             "motion_threshold": round(self.motion_threshold, 4),
             "coherence_threshold": round(self.coherence_threshold, 3),
             "motion_ratio": round(float(self.motion_ratio), 3),

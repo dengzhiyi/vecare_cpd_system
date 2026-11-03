@@ -163,8 +163,10 @@ RESPONSE_BUDGET_S = 10.0     # CPD 总响应预算，从首个证据样本起算
                              # （而不是从确认时刻起算）
 APNEA_TIMEOUT_S = 15.0
 CLEAR_TIMEOUT_S = 25.0
-CALIBRATION_S = 5.0
-EVIDENCE_GAP_RESET_S = 5.0   # 新的一段证据会重新开始计算预算
+# 载波健康短窗：仅用于开机后统计载波相对抖动并裁剪死载波，不要求座舱无人，
+# 也不阻断检测。它不是“空车校准”，真正的空车基线由 calibration.py 单独生成。
+CARRIER_HEALTH_S = 5.0
+EVIDENCE_GAP_RESET_S = 5.0   # 未确认存在时，新的一段证据会重新开始计算预算
 MRC_WEIGHT_FLOOR = 0.02      # 防止零/负增益让某个子载波失效
 INTERFERENCE_DEPTH = 0.35    # 用于抑制脉冲噪声的 V 形 ACF 深度
 
@@ -188,7 +190,7 @@ class DetectorConfig:
     response_budget_s: float = RESPONSE_BUDGET_S
     apnea_timeout_s: float = APNEA_TIMEOUT_S
     clear_timeout_s: float = CLEAR_TIMEOUT_S
-    calibration_s: float = CALIBRATION_S
+    carrier_health_s: float = CARRIER_HEALTH_S
     evidence_gap_reset_s: float = EVIDENCE_GAP_RESET_S
     sensitivity: float = 1.0
 

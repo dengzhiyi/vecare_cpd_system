@@ -14,32 +14,31 @@ MOVING = {"energy": 0.032, "coherence": 0.20, "interference": False}
 NOISY = {"energy": 0.030, "coherence": 0.10, "interference": False}
 
 
-def _calibrate(cfg, det, step=0.1):
-    """持续送入安静帧，直到检测器离开 CALIBRATING。"""
+def _calibrate(det, step=0.1):
+    """持续送入安静帧，直到冷启动背景估计冻结（约 2 s、20 个判决帧）。"""
     t = 0.0
-    limit = int(cfg.calibration_s * 1.5 / step) + 20
-    for _ in range(limit):
+    for _ in range(40):
         det.update(t, QUIET, INVALID_PEAK)
         t += step
         if det.calibrated:
             break
-    assert det.calibrated, "detector failed to calibrate on a quiet cabin"
+    assert det.calibrated, "detector failed to freeze a quiet-cabin background"
     return t
 
 
 def test_calibration_enters_monitoring():
-    cfg = DetectorConfig(calibration_s=1.0)
+    cfg = DetectorConfig()
     det = CPDDetector(cfg)
-    _calibrate(cfg, det)
+    _calibrate(det)
     assert det.state == "MONITORING"
     assert det.motion_threshold == pytest.approx(cfg.motion_ratio_floor())
     assert det.baseline_energy is not None
 
 
 def test_motion_presence_then_alarm_within_budget():
-    cfg = DetectorConfig(calibration_s=1.0, response_budget_s=3.0)
+    cfg = DetectorConfig(response_budget_s=3.0)
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
 
     for _ in range(25):
         snap = det.update(t, MOVING, INVALID_PEAK)
@@ -67,9 +66,9 @@ def test_motion_presence_then_alarm_within_budget():
 
 def test_incoherent_noise_never_confirms_presence():
     """残差能量高但子载波相干性低，属于环境噪声。"""
-    cfg = DetectorConfig(calibration_s=1.0)
+    cfg = DetectorConfig()
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
     for _ in range(300):
         snap = det.update(t, NOISY, INVALID_PEAK)
         t += 0.1
@@ -78,9 +77,9 @@ def test_incoherent_noise_never_confirms_presence():
 
 
 def test_quiet_cabin_never_alarms():
-    cfg = DetectorConfig(calibration_s=1.0)
+    cfg = DetectorConfig()
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
     for _ in range(200):
         snap = det.update(t, QUIET, INVALID_PEAK)
         t += 0.1
@@ -89,9 +88,9 @@ def test_quiet_cabin_never_alarms():
 
 
 def test_interference_frame_suppresses_evidence():
-    cfg = DetectorConfig(calibration_s=1.0)
+    cfg = DetectorConfig()
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
     blocked = dict(MOVING, interference=True)
     for _ in range(200):
         snap = det.update(t, blocked, INVALID_PEAK)
@@ -100,9 +99,9 @@ def test_interference_frame_suppresses_evidence():
 
 
 def test_acknowledge_mutes_but_keeps_presence():
-    cfg = DetectorConfig(calibration_s=1.0, response_budget_s=2.0)
+    cfg = DetectorConfig(response_budget_s=2.0)
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
     for _ in range(60):
         snap = det.update(t, MOVING, INVALID_PEAK)
         t += 0.1
@@ -118,10 +117,10 @@ def test_acknowledge_mutes_but_keeps_presence():
 def test_acknowledged_alarm_clears_after_evidence_disappears():
     """静音不是锁存：车厢安静下来后系统必须复位。"""
     cfg = DetectorConfig(
-        calibration_s=1.0, response_budget_s=2.0, clear_timeout_s=2.0
+        response_budget_s=2.0, clear_timeout_s=2.0
     )
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
     for _ in range(60):
         snap = det.update(t, MOVING, INVALID_PEAK)
         t += 0.1
@@ -143,9 +142,9 @@ def test_acknowledged_alarm_clears_after_evidence_disappears():
 
 
 def test_breathing_stop_escalates_to_apnea():
-    cfg = DetectorConfig(calibration_s=1.0, response_budget_s=120.0, apnea_timeout_s=3.0)
+    cfg = DetectorConfig(response_budget_s=120.0, apnea_timeout_s=3.0)
     det = CPDDetector(cfg)
-    t = _calibrate(cfg, det)
+    t = _calibrate(det)
 
     for _ in range(60):
         det.update(t, QUIET, VALID_PEAK)

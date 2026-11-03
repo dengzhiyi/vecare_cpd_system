@@ -11,6 +11,9 @@
   POST /api/live/speed                {speed}
   POST /api/live/ack                  确认 / 静音告警
   POST /api/live/stop                 停止并收尾会话
+  GET  /api/calibration               空车标定基线状态
+  POST /api/calibration               {duration_s?, hw_f_max?} 执行空车标定
+  POST /api/calibration/clear         删除已保存的空车基线
   GET  /api/sessions                  已记录的会话
   GET  /api/sessions/<id>             回放数据（meta + frames + events）
   GET  /api/sessions/<id>/download/<f> 下载 JSONL / meta
@@ -146,6 +149,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/status":
                 self._send_json(ENGINE.status())
                 return
+            if path == "/api/calibration":
+                self._send_json(ENGINE.calibration_status())
+                return
             if path == "/api/live":
                 since = int(_first(query, "since", "0"))
                 self._send_json(ENGINE.live_payload(since, _first(query, "session", None)))
@@ -227,6 +233,35 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/live/stop":
                 self._send_json(ENGINE.stop(wait=True))
+                return
+            if path == "/api/calibration":
+                if ENGINE.status().get("running"):
+                    self._send_json({"error": "请先停止当前监测，再执行空车标定"}, 409)
+                    return
+                hw = body.get("hw_f_max")
+                if hw in (None, "", 0):
+                    hw_f_max = None
+                else:
+                    try:
+                        hw_f_max = float(hw)
+                    except (TypeError, ValueError):
+                        self._send_json({"error": f"invalid hw_f_max: {hw}"}, 400)
+                        return
+                    if hw_f_max not in BAND_CHOICES:
+                        valid = [int(v) for v in BAND_CHOICES if v is not None]
+                        self._send_json(
+                            {"error": f"hw_f_max must be null or one of {valid}"},
+                            400,
+                        )
+                        return
+                result = ENGINE.calibrate_empty(
+                    duration_s=float(body.get("duration_s", 5.0)),
+                    hw_f_max=hw_f_max,
+                )
+                self._send_json(result, 201)
+                return
+            if path == "/api/calibration/clear":
+                self._send_json(ENGINE.clear_calibration())
                 return
             self._send_json({"error": "not found", "path": path}, 404)
         except json.JSONDecodeError:

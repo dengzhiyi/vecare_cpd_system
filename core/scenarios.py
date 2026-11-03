@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, asdict
 
 @dataclass
 class TargetSpec:
-    enter_t: float = 9.0
+    enter_t: float = 0.0
     exit_t: float | None = None
     distance_m: float = 1.4
     bpm: float = 20.0
@@ -71,14 +71,14 @@ _add(Scenario(
     duration_s=65,
     category="presence",
     target=_target(
-        enter_t=9.0, distance_m=1.55, bpm=18.0, chest_mm=3.0,
+        enter_t=0.0, distance_m=1.55, bpm=18.0, chest_mm=3.0,
         reflectivity=0.030,
-        breathing_windows=[[9.0, 200.0]],
-        motion_events=[{"t": 9.0, "duration": 1.0, "amplitude_m": 0.16, "kind": "settle"}],
+        breathing_windows=[[0.0, 200.0]],
+        motion_events=[{"t": 0.0, "duration": 1.0, "amplitude_m": 0.16, "kind": "settle"}],
         label="入睡婴儿 · 18 BPM",
     ),
     noise_sigma=0.020,
-    expected="约 9 s 出现，呼吸检测确认后 10 s 内告警",
+    expected="开机时儿童已在车内且无空车基线；确认后 10 s 内告警",
 ))
 
 _add(Scenario(
@@ -89,11 +89,11 @@ _add(Scenario(
     duration_s=70,
     category="presence",
     target=_target(
-        enter_t=9.0, distance_m=1.35, bpm=24.0, chest_mm=3.0,
+        enter_t=0.0, distance_m=1.35, bpm=24.0, chest_mm=3.0,
         reflectivity=0.035, awake_jitter_mm=1.2,
-        breathing_windows=[[9.0, 200.0]],
+        breathing_windows=[[0.0, 200.0]],
         motion_events=[
-            {"t": 9.0, "duration": 1.2, "amplitude_m": 0.18, "kind": "settle"},
+            {"t": 0.0, "duration": 1.2, "amplitude_m": 0.18, "kind": "settle"},
             {"t": 17.0, "duration": 1.5, "amplitude_m": 0.10, "kind": "limb"},
             {"t": 27.0, "duration": 1.6, "amplitude_m": 0.12, "kind": "limb"},
             {"t": 38.0, "duration": 1.5, "amplitude_m": 0.09, "kind": "limb"},
@@ -102,7 +102,7 @@ _add(Scenario(
         label="清醒婴儿 · 肢体动作",
     ),
     noise_sigma=0.022,
-    expected="运动快速确认存在；呼吸率随肢体间隙更新",
+    expected="开机即已存在；运动证据快速确认，呼吸率随肢体间隙更新",
 ))
 
 _add(Scenario(
@@ -113,15 +113,14 @@ _add(Scenario(
     duration_s=80,
     category="critical",
     target=_target(
-        enter_t=9.0, distance_m=1.45, bpm=20.0, chest_mm=3.0,
+        enter_t=0.0, distance_m=1.45, bpm=20.0, chest_mm=3.0,
         reflectivity=0.032,
-        breathing_windows=[[9.0, 42.0]],
-        motion_events=[{"t": 9.0, "duration": 1.0, "amplitude_m": 0.16, "kind": "settle"}],
+        breathing_windows=[[0.0, 42.0]],
+        motion_events=[{"t": 0.0, "duration": 1.0, "amplitude_m": 0.16, "kind": "settle"}],
         label="呼吸暂停事件",
     ),
     noise_sigma=0.020,
-    expected="42 s 呼吸停止；约 15–18 s 后升级为 APNEA 告警",
-))
+    expected="42 s 呼吸停止；约 15–18 s 后升级为 APNEA 告警",))
 
 _add(Scenario(
     key="newborn",
@@ -131,10 +130,10 @@ _add(Scenario(
     duration_s=72,
     category="critical",
     target=_target(
-        enter_t=9.0, distance_m=1.60, bpm=30.0, chest_mm=2.6,
+        enter_t=0.0, distance_m=1.60, bpm=30.0, chest_mm=2.6,
         reflectivity=0.024,
-        breathing_windows=[[9.0, 200.0]],
-        motion_events=[{"t": 9.0, "duration": 0.8, "amplitude_m": 0.14, "kind": "settle"}],
+        breathing_windows=[[0.0, 200.0]],
+        motion_events=[{"t": 0.0, "duration": 0.8, "amplitude_m": 0.14, "kind": "settle"}],
         label="新生儿 · 弱呼吸",
     ),
     noise_sigma=0.034,
@@ -171,10 +170,10 @@ _add(Scenario(
     duration_s=60,
     category="presence",
     target=_target(
-        enter_t=9.0, distance_m=2.6, bpm=14.0, chest_mm=4.0,
+        enter_t=0.0, distance_m=2.6, bpm=14.0, chest_mm=4.0,
         reflectivity=0.045,
-        breathing_windows=[[9.0, 200.0]],
-        motion_events=[{"t": 9.0, "duration": 1.0, "amplitude_m": 0.17, "kind": "settle"}],
+        breathing_windows=[[0.0, 200.0]],
+        motion_events=[{"t": 0.0, "duration": 1.0, "amplitude_m": 0.17, "kind": "settle"}],
         label="成人 · 14 BPM",
     ),
     noise_sigma=0.018,

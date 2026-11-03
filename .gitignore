@@ -7,3 +7,5 @@ __pycache__/
 data/sessions/_legacy-pre-v2/
 # --selfcheck 渲染出来的临时 WAV
 data/selfcheck/
+# 空车标定基线属于本车本硬件的实测产物，不入库
+data/calibration/

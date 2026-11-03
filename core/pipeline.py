@@ -11,9 +11,10 @@
 依据硬件上限规划频带（``plan_band``）是设计期的修正手段，但驱动器的 -3 dB
 点很少与数据手册声称的一致，而且滚降并不是唯一会“杀死”载波的因素 ——
 麦克风网罩、手机摆放位置或座舱吸声材料都可能削弱某个频带的一部分，
-在一辆车上出现而在另一辆车上不出现。因此流水线还在运行时做检查：在安静的
-校准窗内测量每个载波的相对抖动，并剔除那些比同伴高出一个数量级的载波
-（``carrier_health``）。
+在一辆车上出现而在另一辆车上不出现。因此流水线还在运行时做检查：在开机后的
+短窗内测量每个载波的相对抖动，并剔除那些比同伴高出一个数量级的载波
+（``carrier_health``）。这个短窗**不要求座舱无人**：它只看载波之间的相对
+差异，儿童呼吸或动作会同时抬高所有载波，不会改变 10 倍的相对判据。
 
 裁剪只会从 DSP 输入中移除列。写入每一帧的 ``csi`` 字段仍保留全部载波，
 因为死掉的载波本身就是真实信息 —— 它告诉操作员的是硬件而非算法出了问题。
@@ -36,10 +37,11 @@ class SASPipeline:
         cfg: DetectorConfig | None = None,
         fs: float = CSI_FS,
         auto_prune: bool = True,
+        background: dict | None = None,
     ):
         self.cfg = cfg or DetectorConfig()
         self.fs = float(fs)
-        self.detector = CPDDetector(self.cfg)
+        self.detector = CPDDetector(self.cfg, background=background)
         self.hist: deque[np.ndarray] = deque(
             maxlen=int(round(self.cfg.breath_window_s * self.fs))
         )
@@ -54,10 +56,10 @@ class SASPipeline:
         self.carrier_jitter: np.ndarray | None = None
         self.prune_threshold = None
         self._calib: list[np.ndarray] = []
-        self._calib_frames = int(round(max(2.0, self.cfg.calibration_s) * self.fs))
+        self._calib_frames = int(round(max(2.0, self.cfg.carrier_health_s) * self.fs))
 
     def _maybe_prune(self, amp: np.ndarray) -> None:
-        """只依据校准窗决定一次，之后不再改变。"""
+        """只依据开机后的载波健康短窗决定一次，之后不再改变。"""
         if not self.auto_prune or self.carrier_mask is not None:
             return
         self._calib.append(amp)

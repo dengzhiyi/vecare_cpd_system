@@ -18,6 +18,7 @@ import zlib
 from datetime import datetime
 from pathlib import Path
 
+from core import calibration as calib
 from core.channel import AcousticChannel
 from core.config import CSI_FS, DetectorConfig, plan_band
 from core.offline import evaluate_frames
@@ -58,6 +59,7 @@ class SimulationEngine:
         self._wall_anchor = 0.0
         self._finalized = True
         self.summary: dict | None = None
+        self.calibration: dict | None = calib.load_empty_calibration()
 
     # ------------------------------------------------------------------
     # 控制
@@ -90,7 +92,10 @@ class SimulationEngine:
             self._finalized = False
 
             cfg = DetectorConfig(sensitivity=sensitivity)
-            self.pipeline = SASPipeline(cfg)
+            # 有空车标定且载波数与本次频带一致时直接加载；否则检测器从开机
+            # 第一帧起做 2 s 自适应背景估计，不再等待 5 s 安静期。
+            profile = calib.load_empty_calibration(band.n_carriers)
+            self.pipeline = SASPipeline(cfg, background=profile)
             session_id = self._new_session_id(scenario.key)
             if seed is None:
                 seed = zlib.crc32(f"{session_id}-{scenario.key}".encode("utf-8")) % (2 ** 31)
@@ -118,6 +123,10 @@ class SimulationEngine:
                 "carriers_planned": int(band.n_carriers),
                 "carrier_spacing_hz": round(band.spacing_hz, 1),
                 "detector_config": cfg.to_dict(),
+                "background": {
+                    "source": "空车标定" if profile else "冷启动自适应",
+                    "profile_created_at": None if profile is None else profile.get("created_at"),
+                },
                 "speed": speed,
                 "seed": int(seed),
                 "status": "running",
@@ -293,12 +302,36 @@ class SimulationEngine:
                 "carriers_planned": self.meta.get("carriers_planned"),
                 "carriers_used": carriers_used,
                 "detector": det,
+                "calibration": {
+                    "available": self.calibration is not None,
+                    "profile": self.calibration,
+                },
                 "summary": self.summary,
                 "frame_count": self.frames[-1]["seq"] if self.frames else 0,
                 "events_count": len(self.events),
                 "target": None if self.scenario is None or self.scenario.target is None
                 else self.scenario.public()["target"],
             }
+
+    def calibrate_empty(self, duration_s: float = 5.0, hw_f_max: float | None = None) -> dict:
+        """执行一次空车标定并更新内存中的基线。"""
+        with self.lock:
+            if self.running:
+                raise RuntimeError("请先停止当前监测，再执行空车标定")
+            self.calibration = calib.calibrate_empty_cabin(
+                duration_s=duration_s, hw_f_max=hw_f_max
+            )
+            return {"available": True, "profile": self.calibration}
+
+    def calibration_status(self) -> dict:
+        with self.lock:
+            return {"available": self.calibration is not None, "profile": self.calibration}
+
+    def clear_calibration(self) -> dict:
+        with self.lock:
+            calib.clear_empty_calibration()
+            self.calibration = None
+            return {"available": False, "profile": None}
 
     def live_payload(self, after_seq: int = 0, session: str | None = None) -> dict:
         with self.lock:
