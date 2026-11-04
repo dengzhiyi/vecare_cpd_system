@@ -1034,16 +1034,16 @@ MRC 有效子载波 19.19 / 24
   <h3 style="font-size:15px;margin:26px 0 10px">连带必须改的一处：κ 阈值要随载波数缩放</h3>
   <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。改成 <span class="mono">median + 5.5 × 稳健σ</span> 后：24 路仍是 0.115（行为不变），17 路升到 0.142，噪声峰值 0.124 被挡、真实运动最弱帧 0.185 仍通过。</p>
 
-  <div class="code"><span class="c"># 已录的音频，按 16 kHz 硬件重新规划频带</span>
-python replay_audio.py capture.wav <span class="p">--hw-f-max</span> <span class="s">16000</span>
+  <div class="code"><span class="c"># 已录的音频，按 18 kHz 硬件重新规划频带</span>
+python replay_audio.py capture.wav --hw-f-max <span class="s">18000</span>
 
 <span class="c"># Kasami 探测音必须同步换，否则探测带仍在往发不出的频段送能量</span>
-python replay_audio.py --emit-probe probe16k.wav --seconds <span class="s">300</span> <span class="p">--hw-f-max</span> <span class="s">16000</span>
+python replay_audio.py --emit-probe probe18k.wav --seconds <span class="s">300</span> --hw-f-max <span class="s">18000</span>
 
 <span class="c"># 在该带宽下跑全场景闭合自检</span>
-python replay_audio.py --selfcheck <span class="p">--hw-f-max</span> <span class="s">16000</span></div>
+python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
 
-  <p>以上是命令行路径。Web UI 侧栏也有「<b>硬件频响上限</b>」一栏，直接选档（论文 / 20k / 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时会写成 <span class="mono">17→16 路（已裁剪）</span>。</p>
+  <p>以上是命令行路径。Web UI 侧栏也有「<b>硬件频响上限</b>」一栏，直接选档（论文 / 20k / 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时会写成 <span class="mono">24→23 路（已裁剪）</span>。</p>
 
   <div class="note warn">
     <b>先测硬件上限再配置，不要依赖兜底。</b>不传 <span class="mono">hw_f_max</span> 时运行时门控仍能消除误报，

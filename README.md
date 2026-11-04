@@ -206,7 +206,7 @@ stress                     —/—                 —/—               —/—
 adult                  9.0/9.1           17.6/17.6           14/14.1         0/0
 ```
 
-判定与呼吸率在七个场景全部一致（`--snr 35` 与仿真器自身的 CSI 噪声水平相当）。加 `--hw-f-max 16000` 会在收窄的新频带上重跑同一套对照。
+判定与呼吸率在七个场景全部一致（`--snr 35` 与仿真器自身的 CSI 噪声水平相当）。加 `--hw-f-max 18000` 会在收窄的新频带上重跑同一套对照。
 
 ## 硬件带宽受限（18 kHz / 16 kHz）
 
@@ -277,17 +277,17 @@ adult                  9.0/9.1           17.6/17.6           14/14.1         0/0
 ### 怎么用
 
 ```bash
-# 已录的音频，按 16 kHz 硬件重新规划频带
-python replay_audio.py capture.wav --hw-f-max 16000
+# 已录的音频，按 18 kHz 硬件重新规划频带
+python replay_audio.py capture.wav --hw-f-max 18000
 
 # 导出配套 Kasami 探测音（必须先换探测音，否则仍会往发不出的频段送能量）
-python replay_audio.py --emit-probe probe16k.wav --seconds 300 --hw-f-max 16000
+python replay_audio.py --emit-probe probe18k.wav --seconds 300 --hw-f-max 18000
 
 # 在该带宽下跑全场景闭合自检
-python replay_audio.py --selfcheck --hw-f-max 16000
+python replay_audio.py --selfcheck --hw-f-max 18000
 ```
 
-离线与实时接口同名参数：`run_offline(key, hw_f_max=16000)`、`POST /api/live/start {"hw_f_max": 16000}`。Web UI 侧栏的「硬件频响上限」直接选档（论文 / 20k / 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时显示为 `17→16 路（已裁剪）`。**正确做法是先测出硬件上限再配置**；不配置时靠运行时门控兜底，能消除误报，但载波仍是按 23.5 kHz 铺的，前端的有效积分带宽被浪费。
+离线与实时接口同名参数：`run_offline(key, hw_f_max=18000)`、`POST /api/live/start {"hw_f_max": 18000}`。Web UI 侧栏的「硬件频响上限」直接选档（论文 / 20k / 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时显示为 `24→23 路（已裁剪）`。**正确做法是先测出硬件上限再配置**；不配置时靠运行时门控兜底，能消除误报，但载波仍是按 23.5 kHz 铺的，前端的有效积分带宽被浪费。
 
 ## 测试
 
