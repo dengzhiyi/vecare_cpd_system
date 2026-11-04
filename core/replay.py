@@ -24,6 +24,7 @@
 """
 from __future__ import annotations
 
+import wave
 import zlib
 from pathlib import Path
 
@@ -167,6 +168,160 @@ def load_csi(
         "_carriers": [round(float(f), 1) for f in carriers],
     }
     return amp, times, meta
+
+
+# ---------------------------------------------------------------------------
+# 录音质检
+# ---------------------------------------------------------------------------
+
+_STATUS_ORDER = {"PASS": 0, "WARN": 1, "FAIL": 2}
+
+
+def _check(name: str, status: str, detail: str) -> dict:
+    return {"name": name, "status": status, "detail": detail}
+
+
+def check_audio(
+    path: str | Path,
+    fs: int | None = None,
+    hw_f_max: float | None = None,
+) -> dict:
+    """判定前的录音质量门：只检查音频前端，不运行检测器。
+
+    为什么需要这道门：``run_wav`` 的判决依赖帧同步、载波频带与电平，任何一项
+    不合格时检测器仍会给出一个数值，却无法区分“场景里没人”和“录音本身废了”。
+    这里把能提前查出的失效逐项标成 PASS / WARN / FAIL，FAIL 时不应继续判定。
+
+    ``fs`` 仅用于重采样试听；真实采集应保持原生采样率，所以原生采样率低于
+    48 kHz 一律判 FAIL，即使重采样后能跑通。
+    """
+    path = Path(path)
+    checks: list[dict] = []
+
+    try:
+        with wave.open(str(path), "rb") as w:
+            native_fs = w.getframerate()
+            channels = w.getnchannels()
+            width = w.getsampwidth()
+            n_frames = w.getnframes()
+        x, used_fs = read_wav(path, target_fs=fs)
+    except (wave.Error, RuntimeError) as exc:
+        return {
+            "path": str(path),
+            "status": "FAIL",
+            "passed": False,
+            "checks": [_check("格式", "FAIL", str(exc))],
+            "meta": None,
+            "sync": None,
+            "error": str(exc),
+        }
+
+    duration = float(n_frames / native_fs) if native_fs else 0.0
+    peak = float(np.max(np.abs(x))) if x.size else 0.0
+    rms = float(np.sqrt(np.mean(x**2))) if x.size else 0.0
+    clipped = int(np.sum(np.abs(x) >= 0.999))
+
+    depth = {1: "8-bit", 2: "16-bit", 3: "24-bit", 4: "32-bit"}.get(width)
+    fmt_detail = (f"WAV PCM {depth or '未知位深'} · {native_fs} Hz · "
+                  f"{'单声道' if channels == 1 else f'{channels} 声道（自动下混）'}")
+    checks.append(_check("格式", "PASS" if depth else "FAIL", fmt_detail))
+
+    fs_detail = f"{native_fs} Hz"
+    if fs is not None and used_fs != native_fs:
+        fs_detail += f"，已重采样到 {used_fs} Hz"
+    if native_fs < 48000:
+        fs_detail += "，低于 48000 Hz"
+    checks.append(_check("采样率", "PASS" if native_fs >= 48000 else "FAIL",
+                         fs_detail))
+
+    if duration >= 20.0:
+        dur_status = "PASS"
+    elif duration >= 12.0:
+        dur_status = "WARN"
+    else:
+        dur_status = "FAIL"
+    checks.append(_check("时长", dur_status, f"{duration:.2f} s（建议 ≥20 s）"))
+
+    if clipped > 0:
+        lvl_status = "FAIL"
+        lvl_detail = f"峰值 {peak:.3f} · 削波 {clipped} 样本"
+    elif peak < 0.02:
+        lvl_status = "WARN"
+        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f}（电平过低）"
+    elif peak > 0.98:
+        lvl_status = "WARN"
+        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f}（接近满刻度）"
+    else:
+        lvl_status = "PASS"
+        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f} · 削波 0"
+    checks.append(_check("电平", lvl_status, lvl_detail))
+
+    meta = None
+    try:
+        _, _, meta = load_csi(path, fs=fs, hw_f_max=hw_f_max)
+    except RuntimeError as exc:
+        checks.append(_check("帧同步", "FAIL", str(exc)))
+    else:
+        sync = meta["sync"]
+        ratio = float(sync["match_ratio"])
+        if ratio >= 12.0:
+            sync_status = "PASS"
+        elif ratio >= 9.0:
+            sync_status = "WARN"
+        else:
+            sync_status = "FAIL"
+        checks.append(_check(
+            "帧同步", sync_status,
+            f"周期 {sync['period_samples']} 采样 · 匹配质量 {ratio:.1f}（阈值 9）",
+        ))
+
+        nominal = int(round(used_fs / CSI_FS))
+        drift = abs(int(sync["period_samples"]) - nominal)
+        checks.append(_check(
+            "周期", "PASS" if drift <= 1 else ("WARN" if drift <= 2 else "FAIL"),
+            f"{sync['period_samples']} 采样/周期 · 标称 {nominal}",
+        ))
+
+        frames = int(meta["frames"])
+        filled, holes = int(sync["filled"]), int(sync["holes"])
+        coverage = float(sync["coverage"])
+        if holes > 0 or coverage < 0.95 or filled > max(10, 0.02 * frames):
+            cont = "FAIL"
+        elif filled > max(2, 0.005 * frames) or coverage < 0.98:
+            cont = "WARN"
+        else:
+            cont = "PASS"
+        checks.append(_check(
+            "连续性", cont,
+            f"{frames} 帧 · 补齐 {filled} · 空洞 {holes} · 覆盖 {coverage*100:.1f}%",
+        ))
+
+        margin = float(meta["probe_db_min"])
+        if margin >= -10.0:
+            band_status = "PASS"
+        elif margin >= -20.0:
+            band_status = "WARN"
+        else:
+            band_status = "FAIL"
+        checks.append(_check(
+            "频带", band_status,
+            f"{meta['carriers']} 载波 @ {meta['carrier_span_hz'][0]:.0f}–"
+            f"{meta['carrier_span_hz'][1]:.0f} Hz · 探头裕量 {margin:.1f} dB",
+        ))
+
+    if meta is not None:
+        meta.pop("_carriers", None)
+
+    worst = max((c["status"] for c in checks), key=_STATUS_ORDER.__getitem__)
+    return {
+        "path": str(path),
+        "status": worst,
+        "passed": worst != "FAIL",
+        "checks": checks,
+        "meta": meta,
+        "sync": None if meta is None else meta["sync"],
+        "error": None,
+    }
 
 
 # ---------------------------------------------------------------------------

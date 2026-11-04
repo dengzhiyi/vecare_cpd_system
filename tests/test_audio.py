@@ -18,7 +18,7 @@ from core.audio import (
     write_wav,
 )
 from core.config import CSI_FS, F_HIGH, F_LOW, N_SUBCARRIERS
-from core.replay import export_probe, load_csi, render_wav, run_wav
+from core.replay import check_audio, export_probe, load_csi, render_wav, run_wav
 
 
 def _render_frame(probe, delays, gains):
@@ -165,6 +165,29 @@ def test_recording_without_the_probe_raises_a_clear_error(tmp_path):
     path = write_wav(tmp_path / "noise.wav", rng.standard_normal(48000 * 3) * 0.1)
     with pytest.raises(RuntimeError, match="probe repetition"):
         load_csi(path)
+
+
+# ---------------------------------------------------------------------------
+# 录音质检：判定前的门
+# ---------------------------------------------------------------------------
+
+def test_quality_check_passes_a_usable_capture(tmp_path):
+    path = tmp_path / "usable.wav"
+    render_wav(path, "sleeping", duration_s=20.0, snr_db=40.0)
+    qc = check_audio(path)
+    assert qc["passed"], qc
+    assert qc["status"] in {"PASS", "WARN"}
+    assert qc["sync"]["match_ratio"] >= 9.0
+    assert qc["sync"]["holes"] == 0
+
+
+def test_quality_check_rejects_a_capture_without_probe(tmp_path):
+    """没有探测音的录音必须被这道门拦住，而不是进入判定给出一个数值。"""
+    path = write_wav(tmp_path / "silence.wav", np.zeros(48000 * 10))
+    qc = check_audio(path)
+    assert not qc["passed"]
+    assert qc["status"] == "FAIL"
+    assert any(c["name"] == "帧同步" and c["status"] == "FAIL" for c in qc["checks"])
 
 
 # ---------------------------------------------------------------------------

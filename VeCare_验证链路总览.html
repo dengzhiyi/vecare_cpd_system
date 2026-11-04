@@ -644,7 +644,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 <!-- ============ 06 ============ -->
 <section id="audio">
   <div class="sec-head"><span class="num">06</span><h2>实采录音接入</h2></div>
-  <p class="sec-sub">四步：生成 Kasami 探测音 → 现场播放并录制 → 命令行判定 → 存成会话。检测代码一行不改，只把输入从「仿真信道」换成「你的 WAV」。</p>
+  <p class="sec-sub">五步：生成 Kasami 探测音 → 现场播放并录制 → 录音质检 → 命令行判定 → 存成会话。检测代码一行不改，只把输入从「仿真信道」换成「你的 WAV」。</p>
 
   <figure>
     <svg width="100%" viewBox="0 0 1000 150" xmlns="http://www.w3.org/2000/svg" role="img">
@@ -671,9 +671,9 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
         <text x="300" y="83" text-anchor="middle" font-size="12" fill="#6b7382">同一台设备最稳</text>
       </g>
       <g>
-        <rect x="416" y="28" width="168" height="78" rx="8" fill="#f4f5f7" stroke="#9aa3b0" stroke-width="0.75"/>
-        <text x="500" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">capture.wav</text>
-        <text x="500" y="83" text-anchor="middle" font-size="12" fill="#6b7382">48 kHz · PCM 整数</text>
+        <rect x="416" y="28" width="168" height="78" rx="8" fill="#e8f5f3" stroke="#0f7b72" stroke-width="0.75"/>
+        <text x="500" y="60" text-anchor="middle" font-size="13.5" font-weight="500" fill="#16181d">录音质检</text>
+        <text x="500" y="83" text-anchor="middle" font-size="12" fill="#6b7382">PASS / WARN / FAIL</text>
       </g>
       <g>
         <rect x="616" y="28" width="168" height="78" rx="8" fill="#eef3fd" stroke="#1f5fd0" stroke-width="0.75"/>
@@ -691,7 +691,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <path d="M784 67 L816 67" fill="none" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#ar6)"/>
     </svg>
   </figure>
-  <figcaption>步骤 01 和 02 在<b>现场</b>完成，03–05 在<b>电脑上</b>完成。前三格里任何一格做错，后面都不会给出有意义的结果——所以下面先讲清楚「怎么录」，再讲「怎么跑」。</figcaption>
+  <figcaption>步骤 01 和 02 在<b>现场</b>完成，03–05 在<b>电脑上</b>完成。任何一格做错，后面都不会给出有意义的结果——所以下面先讲清楚「怎么录」和「怎么查」，再讲「怎么跑」。</figcaption>
 
   <h3>① 生成 Kasami 探测音（只做一次）</h3>
 
@@ -797,7 +797,46 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
     <b>实采适配层已内置，不是“把 WAV 改名成 JSON”。</b>空车录音必须包含 Kasami 探测音，<span class="code-i">--wav</span> 会先由 <span class="code-i">core/replay.py</span> 转成每载波复幅度（50 Hz），再按同一套统计计算；带宽、载波数与前端配置要和运行时一致。样机默认仍用仿真 empty 场景。
   </div>
 
-  <h3>③ 跑判定</h3>
+  <h3>③ 录音质检（先过闸，再判定）</h3>
+
+  <p><span class="code-i">--qc</span> 只检查音频前端，不运行检测器。它回答的是「这段录音能不能用来判定」；<b>FAIL 时不要继续</b>，否则得到的“未检测到儿童”分不清是场景里没人，还是录音本身废了。</p>
+
+  <div class="code"><span class="p">$</span> python replay_audio.py capture.wav --qc
+
+<span class="c"># 合格录音的质检输出</span>
+录音质检    capture.wav
+格式  PASS  WAV PCM 16-bit · 48000 Hz · 单声道
+采样率  PASS  48000 Hz
+时长  PASS  20.00 s（建议 ≥20 s）
+电平  PASS  峰值 0.980 · RMS 0.321 · 削波 0
+帧同步  PASS  周期 960 采样 · 匹配质量 27.2（阈值 9）
+周期  PASS  960 采样/周期 · 标称 960
+连续性  PASS  1000 帧 · 补齐 0 · 空洞 0 · 覆盖 100.0%
+频带  PASS  24 载波 @ 10500–23500 Hz · 探头裕量 -0.0 dB
+------------------------------------------------------------------
+结论  PASS  可以进入判定</div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:90px">项</th><th>PASS</th><th>WARN</th><th>FAIL</th></tr></thead>
+      <tbody>
+        <tr><td><b>格式</b></td><td class="dim">PCM 8/16/24/32-bit WAV</td><td class="dim">—</td><td class="dim">浮点 WAV / mp3 / aac</td></tr>
+        <tr><td><b>采样率</b></td><td class="dim">≥ 48 kHz</td><td class="dim">—</td><td class="dim">&lt; 48 kHz（重采样也救不回来）</td></tr>
+        <tr><td><b>时长</b></td><td class="dim">≥ 20 s</td><td class="dim">12–20 s</td><td class="dim">&lt; 12 s</td></tr>
+        <tr><td><b>电平</b></td><td class="dim">峰值 0.02–0.98，削波 0</td><td class="dim">过低或接近满刻度</td><td class="dim">有削波样本</td></tr>
+        <tr><td><b>帧同步</b></td><td class="dim">匹配质量 ≥ 12</td><td class="dim">9–12</td><td class="dim">&lt; 9（没有可用 Kasami 探测音）</td></tr>
+        <tr><td><b>周期</b></td><td class="dim">标称周期 ±1 采样</td><td class="dim">±2 采样</td><td class="dim">偏差更大（变速/重采样）</td></tr>
+        <tr><td><b>连续性</b></td><td class="dim">空洞 0，覆盖 ≥ 98%</td><td class="dim">补齐偏多或覆盖 95–98%</td><td class="dim">有空洞或覆盖 &lt; 95%</td></tr>
+        <tr><td><b>频带</b></td><td class="dim">探头裕量 ≥ −10 dB</td><td class="dim">−20–−10 dB</td><td class="dim">&lt; −20 dB（高频载波已死）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>退出码可直接串进脚本：</b><span class="code-i">PASS</span> / <span class="code-i">WARN</span> 为 0，<span class="code-i">FAIL</span> 为 1；<span class="code-i">--qc --json</span> 输出机器可读结果。质检必须与探测音导出、空车标定、回放判定使用<b>同一个 <span class="code-i">--hw-f-max</span></b>，否则频带结论对不上。
+  </div>
+
+  <h3>④ 跑判定</h3>
 
   <div class="code"><span class="p">$</span> python replay_audio.py capture.wav
 
@@ -818,7 +857,7 @@ MRC 有效子载波 19.19 / 24
 
   <p class="sec-sub" style="margin:-4px 0 22px">上面这段是真实输出（场景渲染成 WAV 后回灌，非手写示意）。看三个数就够：<b>帧率是否 50.0</b>（栅格对齐）、<b>补齐/空洞是否为 0</b>（没丢周期）、<b>响应时间是否 10 s 左右</b>（预算生效）。</p>
 
-  <h3>④ 存成会话（可选，但推荐）</h3>
+  <h3>⑤ 存成会话（可选，但推荐）</h3>
 
   <div class="code"><span class="p">$</span> python replay_audio.py capture.wav --save data/sessions
 

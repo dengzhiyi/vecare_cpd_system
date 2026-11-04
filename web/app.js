@@ -623,6 +623,11 @@ function renderTruth(last) {
   set('truthDistance', truth.distance_m == null ? '—' : `${fmt2(truth.distance_m)} m`, '');
 }
 
+/* 事件流每次数据刷新（10 Hz）都会调用本函数。若每帧重写 innerHTML，
+   所有条目的 event-in 动画会反复从头播放，看起来就是整列一直在闪缩。
+   这里按内容签名比对：内容没变就不碰 DOM；只有新到的条目播放入场动画。 */
+let renderedEventKeys = [];
+
 function renderEvents(events, last, opts) {
   const list = $('eventList');
   let evs = events || [];
@@ -631,16 +636,28 @@ function renderEvents(events, last, opts) {
   }
   $('eventCount').textContent = `${evs.length} 条`;
   if (!evs.length) {
-    list.innerHTML = '<li class="event-empty">尚无事件。开始监测后，校准、检测与告警事件会记录在此。</li>';
+    if (renderedEventKeys.length) {
+      list.innerHTML = '<li class="event-empty">尚无事件。开始监测后，校准、检测与告警事件会记录在此。</li>';
+      renderedEventKeys = [];
+    }
     return;
   }
+
   const items = evs.slice(-40).reverse();
-  list.innerHTML = items.map((ev) => `
-    <li class="event-item ${esc(ev.kind || 'state')}">
+  const keys = items.map((ev) => `${ev.t}|${ev.kind || 'state'}|${ev.message}`);
+  if (keys.length === renderedEventKeys.length
+      && keys.every((key, i) => key === renderedEventKeys[i])) {
+    return;
+  }
+
+  const previous = new Set(renderedEventKeys);
+  list.innerHTML = items.map((ev, i) => `
+    <li class="event-item ${esc(ev.kind || 'state')}${previous.has(keys[i]) ? ' static' : ''}">
       <time>${fmt1(ev.t)}s</time>
       <p>${esc(ev.message)}</p>
     </li>
   `).join('');
+  renderedEventKeys = keys;
 }
 
 function renderAlarmBanner(det, opts) {

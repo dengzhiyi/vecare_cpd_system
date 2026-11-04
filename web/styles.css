@@ -846,6 +846,8 @@ input[type="range"]::-moz-range-thumb {
   background: rgba(8, 13, 19, 0.55);
   animation: event-in 0.25s ease;
 }
+/* 已渲染过的条目在列表刷新时不再重播入场动画，只有新事件才闪入。 */
+.event-item.static { animation: none; }
 .event-item time {
   font-family: var(--mono);
   font-size: 9.5px;

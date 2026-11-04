@@ -4,13 +4,16 @@
     # 1. 生成 Kasami 探测音（录音时必须循环播放它）
     python replay_audio.py --emit-probe probe.wav --seconds 300
 
-    # 2. 把已录好的音频跑一遍检测
+    # 2. 判定前先做录音质量检查；FAIL 时不要继续
+    python replay_audio.py capture.wav --qc
+
+    # 3. 把已录好的音频跑一遍检测
     python replay_audio.py capture.wav
 
-    # 3. 没有硬件也能验证这条链路
+    # 4. 没有硬件也能验证这条链路
     python replay_audio.py --selfcheck
 
-    # 4. 存成可回放的会话，之后在 Web UI「日志回放」里看
+    # 5. 存成可回放的会话，之后在 Web UI「日志回放」里看
     python replay_audio.py capture.wav --save data/sessions
 
 介质来源：
@@ -32,7 +35,7 @@ import core.scenarios as scenarios
 from core.config import AUDIO_FS
 from core.offline import run_offline
 from core.config import plan_band
-from core.replay import export_probe, render_wav, run_wav
+from core.replay import check_audio, export_probe, render_wav, run_wav
 
 
 def _fmt(value, digits=1, unit=""):
@@ -90,6 +93,22 @@ def print_report(result: dict) -> None:
           f"      最大能量比 {m['max_motion_ratio']}")
     n_carriers = src.get("carriers_used", src.get("carriers"))
     print(f"MRC 有效子载波 {_fmt(m.get('mrc_neff'), 2)} / {n_carriers}")
+    print("=" * 66)
+
+
+def print_qc(qc: dict) -> None:
+    """打印录音质检结果；FAIL 时调用方应停止，不再跑判定。"""
+    print("=" * 66)
+    print(f"录音质检    {qc['path']}")
+    for item in qc["checks"]:
+        print(f"{item['name']}  {item['status']}  {item['detail']}")
+    print("-" * 66)
+    advice = {
+        "PASS": "可以进入判定",
+        "WARN": "可以判定，但结果可能不稳，建议先改善录音",
+        "FAIL": "不要进入判定，先修录音",
+    }[qc["status"]]
+    print(f"结论  {qc['status']}  {advice}")
     print("=" * 66)
 
 
@@ -196,6 +215,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="写出 Kasami 探测音，录音时循环播放")
     ap.add_argument("--seconds", type=float, default=300.0,
                     help="Kasami 探测音时长（默认 300 s）")
+    ap.add_argument("--qc", action="store_true",
+                    help="只做录音质量检查，不跑检测；FAIL 时退出码 1")
     ap.add_argument("--selfcheck", action="store_true", help="渲染全部场景并回放自检")
     ap.add_argument("--snr", type=float, default=35.0, help="自检渲染信噪比（默认 35 dB）")
     ap.add_argument("--out", default="data/selfcheck", help="自检输出目录")
@@ -224,6 +245,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.audio:
         ap.print_help()
         return 2
+
+    if args.qc:
+        qc = check_audio(args.audio, fs=args.fs, hw_f_max=args.hw_f_max)
+        if args.json:
+            print(json.dumps(qc, ensure_ascii=False, indent=2, default=str))
+        else:
+            print_qc(qc)
+        return 0 if qc["passed"] else 1
 
     result = run_wav(args.audio, sensitivity=args.sensitivity, fs=args.fs,
                      hw_f_max=args.hw_f_max)
