@@ -18,10 +18,10 @@
   GET  /api/sessions/<id>             回放数据（meta + frames + events）
   GET  /api/sessions/<id>/download/<f> 下载 JSONL / meta
   POST /api/audio/analyze?hw_f_max=18000&name=capture.wav&seconds=60
-                                      上传 WAV（请求体为原始字节），返回波形、
-                                      频谱、CSI 与关键参数，供「音频可视化」页
-                                      使用；seconds 只分析开头一段，缺省为
-                                      完整文件
+                                      上传 WAV（请求体为原始字节），返回语谱
+                                      图、频谱、CSI 与关键参数，供「音频
+                                      可视化」页使用；seconds 只分析开头一
+                                      段，缺省为完整文件
 """
 from __future__ import annotations
 

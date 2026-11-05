@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.signal import welch
+from scipy.signal import spectrogram, welch
 
 from .audio import (
     carrier_bins,
@@ -31,7 +31,9 @@ from .pipeline import SASPipeline
 from .replay import check_audio, load_csi, summarise
 
 # 数组下采样上限：前端 Canvas 与 JSON 传输都不需要原始 48 kHz 采样。
-WAVE_POINTS = 1600
+SPEC_TIME_POINTS = 600
+SPEC_FREQ_POINTS = 150
+SPEC_RANGE_DB = 70.0
 SPECTRUM_POINTS = 1400
 FRAME_POINTS = 700
 
@@ -40,23 +42,63 @@ def _round_list(values, digits: int = 3) -> list[float]:
     return [round(float(v), digits) for v in values]
 
 
-def _envelope(x: np.ndarray, fs: float, target: int = WAVE_POINTS) -> dict:
-    """按块取最大值/最小值，保留瞬态的同时把点数压到 Canvas 可承受的量级。"""
+def _spectrogram(
+    x: np.ndarray,
+    fs: float,
+    time_points: int = SPEC_TIME_POINTS,
+    freq_points: int = SPEC_FREQ_POINTS,
+) -> dict:
+    """语谱图：时间 × 频率的相对功率，量化为 0–255 的灰度索引。
+
+    保留 0–20 kHz 全带：既能看 10–17 kHz 探测载波是否始终存在，也能看到
+    AGC／降噪把整段压掉、某个载波出现零点、宽带噪声突发和录音掉帧。
+    频率轴按块取最大值，避免窄带载波被平均抹平；时间轴同样取最大值以
+    保留瞬态。
+    """
+    empty = {
+        "t": [],
+        "f_hz": [],
+        "db": [],
+        "range_db": SPEC_RANGE_DB,
+        "peak_db": None,
+        "f_max_hz": round(min(fs / 2.0, 20000.0), 1),
+    }
     n = int(x.size)
-    if n == 0:
-        return {"t": [], "max": [], "min": [], "rms": []}
-    step = max(1, int(np.ceil(n / target)))
-    blocks = n // step
-    if blocks == 0:
-        return {"t": [0.0], "max": [float(abs(x[0]))], "min": [float(x[0])], "rms": []}
-    view = x[: blocks * step].reshape(blocks, step)
-    mid = (np.arange(blocks, dtype=float) * step + 0.5 * step) / fs
-    rms = np.sqrt(np.mean(view ** 2, axis=1))
+    nper = min(2048, n)
+    if nper < 256:
+        return empty
+    freqs, times, power = spectrogram(
+        x, fs=fs, nperseg=nper, noverlap=nper // 2, detrend=False,
+        scaling="density", mode="psd",
+    )
+    limit = min(fs / 2.0, 20000.0)
+    keep = freqs <= limit
+    freqs, power = freqs[keep], power[keep]
+    db = 10.0 * np.log10(np.maximum(power, 1e-20))
+    peak = float(db.max())
+    db = np.clip(db, peak - SPEC_RANGE_DB, peak)
+
+    if freqs.size > freq_points:
+        step = int(np.ceil(freqs.size / freq_points))
+        m = freqs.size // step
+        freqs = freqs[: m * step].reshape(m, step).mean(axis=1)
+        db = db[: m * step, :].reshape(m, step, db.shape[1]).max(axis=1)
+    if times.size > time_points:
+        step = int(np.ceil(times.size / time_points))
+        m = times.size // step
+        times = times[: m * step].reshape(m, step).mean(axis=1)
+        db = db[:, : m * step].reshape(db.shape[0], m, step).max(axis=2)
+
+    codes = np.clip((db - (peak - SPEC_RANGE_DB)) / SPEC_RANGE_DB, 0.0, 1.0) * 255.0
     return {
-        "t": _round_list(mid, 4),
-        "max": _round_list(view.max(axis=1)),
-        "min": _round_list(view.min(axis=1)),
-        "rms": _round_list(rms),
+        "t": _round_list(times, 3),
+        "f_hz": _round_list(freqs, 1),
+        "db": codes.round().astype(int).tolist(),
+        "range_db": SPEC_RANGE_DB,
+        "peak_db": round(peak, 1),
+        "f_max_hz": round(limit, 1),
+        "window_ms": round(nper / fs * 1000.0, 1),
+        "hop_ms": round(nper / 2.0 / fs * 1000.0, 1),
     }
 
 
@@ -136,7 +178,7 @@ def analyze_audio(
     path = str(path)
     qc = check_audio(path, fs=fs, hw_f_max=hw_f_max, max_seconds=max_seconds)
     x, native_fs = read_wav(path, target_fs=fs, max_seconds=max_seconds)
-    waveform = _envelope(x, float(native_fs))
+    specgram = _spectrogram(x, float(native_fs))
     spectrum = _spectrum(x, float(native_fs))
     duration_s = round(float(x.size) / float(native_fs), 2)
     file_duration_s = _wav_duration_s(path)
@@ -155,7 +197,7 @@ def analyze_audio(
         "duration_s": duration_s,
         "file_duration_s": file_duration_s,
         "qc": qc,
-        "waveform": waveform,
+        "spectrogram": specgram,
         "spectrum": spectrum,
         "band": {
             "describe": band.describe(),
@@ -436,25 +478,27 @@ def show_gui(path: str | Path, hw_f_max: float | None = None,
         ax.grid(color="#1d2b3a", linewidth=0.6, alpha=0.8)
 
     labels = (
-        dict(wave="波形包络", spec="频谱与探测带", csi="CSI 幅度热力图",
+        dict(specgram="语谱图 (0–20 kHz)", spec="频谱与探测带", csi="CSI 幅度热力图",
              carrier="每载波功率", motion="运动能量比 / 相干性", bpm="呼吸率趋势",
-             x_time="时间 (s)", x_freq="频率 (kHz)", y_amp="幅度",
+             x_time="时间 (s)", x_freq="频率 (kHz)", y_freq="频率 (kHz)", y_amp="幅度",
              y_db="dB", y_motion="能量比", y_bpm="BPM", params="关键参数")
         if zh else
-        dict(wave="Waveform envelope", spec="Spectrum & probe band", csi="CSI amplitude",
+        dict(specgram="Spectrogram (0-20 kHz)", spec="Spectrum & probe band", csi="CSI amplitude",
              carrier="Per-carrier power", motion="Motion ratio / coherence", bpm="Breathing rate",
-             x_time="time (s)", x_freq="frequency (kHz)", y_amp="amplitude",
+             x_time="time (s)", x_freq="frequency (kHz)", y_freq="frequency (kHz)", y_amp="amplitude",
              y_db="dB", y_motion="ratio", y_bpm="BPM", params="key parameters")
     )
 
-    wave = data["waveform"]
-    if wave["t"]:
-        axes[0].fill_between(wave["t"], wave["min"], wave["max"], color="#4ea1ff", alpha=0.55, linewidth=0)
-        axes[0].plot(wave["t"], wave["rms"], color="#f2b35c", linewidth=1.1)
-        axes[0].plot(wave["t"], [-v for v in wave["rms"]], color="#f2b35c", linewidth=1.1, alpha=0.6)
-    axes[0].set_title(labels["wave"], color="#dfe9f5", fontsize=10)
+    sg = data["spectrogram"]
+    if sg["db"]:
+        axes[0].imshow(
+            np.asarray(sg["db"]), aspect="auto", origin="lower", cmap="magma",
+            extent=[0.0, data["duration_s"], sg["f_hz"][0] / 1000.0, sg["f_hz"][-1] / 1000.0],
+            vmin=0, vmax=255,
+        )
+    axes[0].set_title(labels["specgram"], color="#dfe9f5", fontsize=10)
     axes[0].set_xlabel(labels["x_time"], color="#8b9bb0", fontsize=8)
-    axes[0].set_ylabel(labels["y_amp"], color="#8b9bb0", fontsize=8)
+    axes[0].set_ylabel(labels["y_freq"], color="#8b9bb0", fontsize=8)
 
     spec = data["spectrum"]
     if spec["f_hz"]:

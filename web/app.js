@@ -1016,22 +1016,39 @@ function drawAcfChart(frames, det, last) {
   $('acfFoot').textContent = lag == null ? '—' : `峰值 τ_b ${lag.toFixed(2)} s · 置信度 ${fmt2(conf)}`;
 }
 
-function heatColor(t) {
+function stopsRgb(stops, t) {
   t = clamp(t, 0, 1);
-  for (let i = 1; i < HEAT_STOPS.length; i++) {
-    const [p0, c0] = HEAT_STOPS[i - 1];
-    const [p1, c1] = HEAT_STOPS[i];
+  for (let i = 1; i < stops.length; i++) {
+    const [p0, c0] = stops[i - 1];
+    const [p1, c1] = stops[i];
     if (t <= p1) {
       const u = (t - p0) / (p1 - p0 || 1);
-      const r = Math.round(c0[0] + (c1[0] - c0[0]) * u);
-      const g = Math.round(c0[1] + (c1[1] - c0[1]) * u);
-      const b = Math.round(c0[2] + (c1[2] - c0[2]) * u);
-      return `rgb(${r},${g},${b})`;
+      return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * u),
+        Math.round(c0[1] + (c1[1] - c0[1]) * u),
+        Math.round(c0[2] + (c1[2] - c0[2]) * u),
+      ];
     }
   }
-  const c = HEAT_STOPS[HEAT_STOPS.length - 1][1];
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
+  return stops[stops.length - 1][1];
 }
+
+function heatColor(t) {
+  const [r, g, b] = stopsRgb(HEAT_STOPS, t);
+  return `rgb(${r},${g},${b})`;
+}
+
+/* 语谱图配色（类似 magma）：暗底 → 紫 → 红 → 黄白 */
+const SPEC_STOPS = [
+  [0.0, [6, 9, 22]],
+  [0.2, [30, 27, 74]],
+  [0.4, [85, 32, 116]],
+  [0.6, [152, 44, 116]],
+  [0.78, [219, 93, 84]],
+  [0.92, [247, 170, 71]],
+  [1.0, [252, 241, 173]],
+];
+const SPEC_LUT = Array.from({ length: 256 }, (_, i) => stopsRgb(SPEC_STOPS, i / 255));
 
 function drawHeatmap(frames) {
   const canvas = $('heatmap');
@@ -1293,7 +1310,7 @@ function renderAudioViz() {
   const data = S.audioViz.data;
   if (!data) return;
   renderAudioParams(data);
-  drawAudioWave(data);
+  drawAudioSpectrogram(data);
   drawAudioSpectrum(data);
   drawAudioCsi(data);
   drawAudioCarriers(data);
@@ -1323,45 +1340,62 @@ function audioSeries(t, values) {
   return t.map((x, i) => ({ x, y: values[i] }));
 }
 
-function drawAudioWave(data) {
-  const canvas = $('audioWaveChart');
-  const wv = data.waveform || {};
-  if (!wv.t || !wv.t.length) { drawEmpty(canvas, '无波形数据'); return; }
-  const { ctx, w, h } = setupCanvas(canvas);
-  const rect = plotRect(w, h);
-  const xMax = Math.max(0.01, data.duration_s);
-  let peak = 0;
-  for (let i = 0; i < wv.t.length; i++) {
-    peak = Math.max(peak, Math.abs(wv.max[i]), Math.abs(wv.min[i]));
+/* 语谱图：服务端返回 0–255 的相对功率码，逐格上色后整体贴到 Canvas。
+   先把整幅图画进一张 cols×rows 的离屏画布再缩放，比逐格 fillRect 快一个量级。 */
+function drawAudioSpectrogram(data) {
+  const canvas = $('audioSpectrogramChart');
+  const sg = data.spectrogram || {};
+  if (!sg.t || !sg.t.length || !sg.db || !sg.db.length) {
+    drawEmpty(canvas, '无语谱数据');
+    $('audioSpecgramFoot').textContent = '—';
+    return;
   }
-  const yMax = Math.max(1e-6, peak * 1.08);
-  drawAxes(ctx, rect, 0, xMax, -yMax, yMax, {
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h, { l: 46, r: 12, t: 10, b: 24 });
+  const xMax = Math.max(0.01, data.duration_s);
+  const yMax = Math.max(1, (sg.f_max_hz || 20000) / 1000);
+  drawAxes(ctx, rect, 0, xMax, 0, yMax, {
     fmtX: (v) => `${v.toFixed(1)}s`,
-    fmtY: (v) => v.toFixed(2),
+    fmtY: (v) => `${v.toFixed(0)}k`,
   });
+
+  const rows = sg.db.length;
+  const cols = sg.t.length;
+  const img = document.createElement('canvas');
+  img.width = cols;
+  img.height = rows;
+  const ictx = img.getContext('2d');
+  const idata = ictx.createImageData(cols, rows);
+  for (let f = 0; f < rows; f++) {
+    const row = sg.db[f];
+    const y = rows - 1 - f;
+    for (let c = 0; c < cols; c++) {
+      const [r, g, b] = SPEC_LUT[clamp(row[c], 0, 255)];
+      const p = (y * cols + c) * 4;
+      idata.data[p] = r;
+      idata.data[p + 1] = g;
+      idata.data[p + 2] = b;
+      idata.data[p + 3] = 255;
+    }
+  }
+  ictx.putImageData(idata, 0, 0);
 
   ctx.save();
   ctx.beginPath();
   ctx.rect(rect.l, rect.t, rect.w, rect.h);
   ctx.clip();
-  ctx.beginPath();
-  ctx.moveTo(xOf(wv.t[0], rect, 0, xMax), yOf(wv.max[0], rect, -yMax, yMax));
-  for (let i = 1; i < wv.t.length; i++) {
-    ctx.lineTo(xOf(wv.t[i], rect, 0, xMax), yOf(wv.max[i], rect, -yMax, yMax));
-  }
-  for (let i = wv.t.length - 1; i >= 0; i--) {
-    ctx.lineTo(xOf(wv.t[i], rect, 0, xMax), yOf(wv.min[i], rect, -yMax, yMax));
-  }
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(78, 161, 255, 0.28)';
-  ctx.fill();
+  ctx.drawImage(img, rect.l, rect.t, rect.w, rect.h);
   ctx.restore();
+  ctx.strokeStyle = 'rgba(140, 175, 205, 0.22)';
+  ctx.strokeRect(rect.l, rect.t, rect.w, rect.h);
+  ctx.fillStyle = 'rgba(223, 233, 245, 0.65)';
+  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${sg.range_db} dB`, rect.r - 2, rect.t + 2);
 
-  const rms = audioSeries(wv.t, wv.rms);
-  drawSeries(ctx, rms, rect, 0, xMax, -yMax, yMax, '#f2b35c', 1.1);
-  drawSeries(ctx, rms.map((p) => ({ x: p.x, y: p.y == null ? null : -p.y })),
-    rect, 0, xMax, -yMax, yMax, '#f2b35c', 1.1);
-  $('audioWaveFoot').textContent = `峰值 ${peak.toFixed(3)} · ${data.fs} Hz`;
+  $('audioSpecgramFoot').textContent =
+    `${cols}×${rows} · 窗 ${sg.window_ms} ms · 峰值 ${sg.peak_db} dB`;
 }
 
 function drawAudioSpectrum(data) {

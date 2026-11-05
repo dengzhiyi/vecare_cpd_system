@@ -11,8 +11,9 @@ import pytest
 
 from core.audio_viz import (
     FRAME_POINTS,
+    SPEC_FREQ_POINTS,
+    SPEC_TIME_POINTS,
     SPECTRUM_POINTS,
-    WAVE_POINTS,
     analyze_audio,
     analyze_bytes,
 )
@@ -34,9 +35,15 @@ def test_analyze_audio_returns_plot_ready_arrays(rendered_wav):
     assert data["fs"] == 48000
     assert 20.0 <= data["duration_s"] <= 30.0
 
-    wave = data["waveform"]
-    assert 0 < len(wave["t"]) <= WAVE_POINTS
-    assert len(wave["t"]) == len(wave["max"]) == len(wave["min"]) == len(wave["rms"])
+    sg = data["spectrogram"]
+    assert 0 < len(sg["t"]) <= SPEC_TIME_POINTS
+    assert 0 < len(sg["f_hz"]) <= SPEC_FREQ_POINTS
+    assert len(sg["db"]) == len(sg["f_hz"])
+    assert all(len(row) == len(sg["t"]) for row in sg["db"])
+    codes = [v for row in sg["db"] for v in row]
+    assert 0 <= min(codes) and max(codes) <= 255
+    assert sg["f_max_hz"] <= 20000
+    assert sg["range_db"] > 0
 
     spec = data["spectrum"]
     assert 0 < len(spec["f_hz"]) <= SPECTRUM_POINTS
@@ -90,8 +97,8 @@ def test_analyze_without_probe_degrades_instead_of_raising(tmp_path):
     assert data["trends"] == {}
     assert data["events"] == []
     assert data["summary"]["detected"] is False
-    # 波形与频谱仍然可用：前端能显示“录到了什么”，只是无法恢复 CSI。
-    assert data["waveform"]["t"]
+    # 语谱图与频谱仍然可用：前端能显示“录到了什么”，只是无法恢复 CSI。
+    assert data["spectrogram"]["t"]
     assert data["spectrum"]["f_hz"]
     assert all(item["status"] in {"PASS", "WARN", "FAIL", "INFO"}
                for item in data["params"])

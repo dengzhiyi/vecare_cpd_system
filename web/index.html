@@ -366,7 +366,7 @@
         <span class="hint">WAV · 本地分析</span>
       </div>
       <p class="note">
-        上传一段包含 Kasami 探测音的 WAV，查看波形、频谱、CSI 与检测器实际使用的关键参数。
+        上传一段包含 Kasami 探测音的 WAV，查看语谱图、频谱、CSI 与检测器实际使用的关键参数。
         文件只在本地服务中分析，不上传云端。
       </p>
       <div class="audio-controls">
@@ -416,13 +416,13 @@
 
       <section class="card chart-card">
         <div class="card-head">
-          <h2>波形包络</h2>
-          <span class="hint">峰值 / RMS</span>
+          <h2>语谱图</h2>
+          <span class="hint">STFT · 0–20 kHz</span>
         </div>
-        <canvas id="audioWaveChart" height="190"></canvas>
+        <canvas id="audioSpectrogramChart" height="190"></canvas>
         <div class="chart-foot">
-          <span>按块取最大/最小值，保留瞬态</span>
-          <b id="audioWaveFoot" class="mono">—</b>
+          <span>相对峰值 0–70 dB；暗带即掉帧、压带或干扰</span>
+          <b id="audioSpecgramFoot" class="mono">—</b>
         </div>
       </section>
 
