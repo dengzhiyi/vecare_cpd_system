@@ -32,6 +32,7 @@
     <nav class="tabs" aria-label="视图切换">
       <button class="tab active" data-view="live">实时监测</button>
       <button class="tab" data-view="replay">日志回放</button>
+      <button class="tab" data-view="audio">音频可视化</button>
       <button class="tab" data-view="about">模型说明</button>
     </nav>
   </header>
@@ -47,7 +48,7 @@
     <button id="ackBtn" class="btn alarm-btn">确认并静音</button>
   </div>
 
-  <main class="layout">
+  <main class="layout" id="mainLayout">
     <aside class="sidebar">
 
       <!--
@@ -352,6 +353,137 @@
       </footer>
     </div>
   </main>
+
+  <!--
+    录音音频可视化：前端把 File 直接作为请求体 POST /api/audio/analyze，
+    查询参数 hw_f_max 必须与录制/导出探测音时一致；后端返回下采样后的
+    波形、频谱、CSI、逐载波功率与检测器趋势，图表全部在 Canvas 上绘制。
+  -->
+  <section id="audioView" class="audio-view hidden">
+    <section class="card audio-intro">
+      <div class="card-head">
+        <h2>录音音频可视化</h2>
+        <span class="hint">WAV · 本地分析</span>
+      </div>
+      <p class="note">
+        上传一段包含 Kasami 探测音的 WAV，查看波形、频谱、CSI 与检测器实际使用的关键参数。
+        文件只在本地服务中分析，不上传云端。
+      </p>
+      <div class="audio-controls">
+        <label class="audio-file">
+          <input type="file" id="audioFile" accept=".wav,audio/wav">
+          <span id="audioFileName">选择 WAV 录音</span>
+        </label>
+        <div class="chips" id="audioBandChips">
+          <button class="chip" data-hw="">论文</button>
+          <button class="chip" data-hw="20000">20k</button>
+          <button class="chip active" data-hw="18000">18k</button>
+          <button class="chip" data-hw="16000">16k</button>
+          <button class="chip" data-hw="14000">14k</button>
+        </div>
+        <label class="audio-length">
+          <span>分析长度</span>
+          <select id="audioLength" title="只分析录音开头的一段，默认总时长">
+            <option value="" selected>总时长</option>
+            <option value="10">前 10 s</option>
+            <option value="30">前 30 s</option>
+            <option value="60">前 60 s</option>
+            <option value="120">前 120 s</option>
+            <option value="300">前 300 s</option>
+          </select>
+        </label>
+        <button id="audioAnalyzeBtn" class="btn primary audio-analyze">分析</button>
+      </div>
+      <p id="audioStatus" class="scenario-note">
+        录音内需包含循环播放的 Kasami 探测音；频带必须与录制时一致。
+      </p>
+    </section>
+
+    <div class="audio-grid">
+      <section class="card chart-card audio-params-card">
+        <div class="card-head">
+          <h2>关键参数</h2>
+          <span class="hint" id="audioQc">—</span>
+        </div>
+        <div id="audioParams" class="param-list">
+          <p class="empty-note">分析后显示录音质检与判决参数</p>
+        </div>
+        <div id="audioEvents" class="audio-events"></div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>波形包络</h2>
+          <span class="hint">峰值 / RMS</span>
+        </div>
+        <canvas id="audioWaveChart" height="190"></canvas>
+        <div class="chart-foot">
+          <span>按块取最大/最小值，保留瞬态</span>
+          <b id="audioWaveFoot" class="mono">—</b>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>频谱与探测带</h2>
+          <span class="hint">Welch PSD</span>
+        </div>
+        <canvas id="audioSpectrumChart" height="190"></canvas>
+        <div class="chart-foot">
+          <span>蓝带为 Kasami 探测带，竖线为载波</span>
+          <b id="audioSpecFoot" class="mono">—</b>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>CSI 幅度热力图</h2>
+          <span class="hint">载波 × 时间</span>
+        </div>
+        <canvas id="audioCsiChart" height="190"></canvas>
+        <div class="chart-foot">
+          <span>逐载波复幅度 |H(f,t)|</span>
+          <b id="audioCsiFoot" class="mono">—</b>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>每载波功率</h2>
+          <span class="hint">红色为运行时剔除</span>
+        </div>
+        <canvas id="audioCarrierChart" height="190"></canvas>
+        <div class="chart-foot">
+          <span>相对最强载波的 dB</span>
+          <b id="audioCarrierFoot" class="mono">—</b>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>运动能量比 δ/δ₀</h2>
+          <span class="hint">检测器实际判决量</span>
+        </div>
+        <canvas id="audioMotionChart" height="190"></canvas>
+        <div class="chart-foot">
+          <span>虚线为运动阈值</span>
+          <b id="audioMotionFoot" class="mono">—</b>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>呼吸率趋势</h2>
+          <span class="hint">BPM</span>
+        </div>
+        <canvas id="audioBpmChart" height="190"></canvas>
+        <div class="chart-foot">
+          <span>来自同一串 CSI，与实时监测一致</span>
+          <b id="audioBpmFoot" class="mono">—</b>
+        </div>
+      </section>
+    </div>
+  </section>
 
   <section id="aboutView" class="about-view hidden">
     <div class="about-inner">

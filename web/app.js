@@ -24,6 +24,7 @@ const S = {
     index: 0, playing: false, speed: 1, timer: null,
   },
   audio: { ctx: null, lastBeep: 0 },
+  audioViz: { hwFMax: 18000, seconds: null, data: null, busy: false },
 };
 
 const LIVE_WINDOW_S = 30;
@@ -134,6 +135,27 @@ function bindUI() {
     S.hwFMax = raw == null || raw === '' ? null : Number(raw);
     renderBandChips();
   });
+
+  $('audioBandChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const raw = chip.dataset.hw;
+    S.audioViz.hwFMax = raw == null || raw === '' ? null : Number(raw);
+    $('audioBandChips').querySelectorAll('.chip').forEach((c) => {
+      c.classList.toggle('active', c === chip);
+    });
+  });
+
+  $('audioFile').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    $('audioFileName').textContent = file ? file.name : '选择 WAV 录音';
+  });
+  $('audioLength').addEventListener('change', (e) => {
+    const raw = e.target.value;
+    /* 空值表示总时长；其余为只分析录音开头的秒数，由后端截取。 */
+    S.audioViz.seconds = raw === '' ? null : Number(raw);
+  });
+  $('audioAnalyzeBtn').addEventListener('click', analyzeAudioFile);
 
   $('sensitivity').addEventListener('input', (e) => {
     S.sensitivity = Number(e.target.value);
@@ -454,6 +476,8 @@ function setView(view) {
     $('aboutView').classList.add('hidden');
     $('liveControls').classList.toggle('hidden', view !== 'live');
     $('replayControls').classList.toggle('hidden', view !== 'replay');
+    $('mainLayout').classList.toggle('hidden', view === 'audio');
+    $('audioView').classList.toggle('hidden', view !== 'audio');
   }
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === S.view));
 
@@ -462,12 +486,15 @@ function setView(view) {
   } else if (view === 'replay') {
     loadSessions();
     renderReplayFrame();
+  } else if (view === 'audio') {
+    renderAudioViz();
   }
 }
 
 function renderCurrent() {
   if (S.view === 'live') renderLive();
   else if (S.view === 'replay') renderReplayFrame();
+  else if (S.view === 'audio') renderAudioViz();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1221,3 +1248,287 @@ function beep() {
     osc.stop(t0 + offset + 0.16);
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* 录音音频可视化                                                        */
+async function analyzeAudioFile() {
+  const input = $('audioFile');
+  const file = input.files && input.files[0];
+  if (!file) { toast('请先选择一段 WAV 录音'); return; }
+  if (S.audioViz.busy) return;
+  S.audioViz.busy = true;
+  $('audioAnalyzeBtn').disabled = true;
+  $('audioStatus').textContent = `正在分析 ${file.name}…`;
+  try {
+    /* 直接把 File 作为请求体发送，避免 multipart；hw_f_max 必须与录制时一致。 */
+    const query = new URLSearchParams({ name: file.name });
+    if (S.audioViz.hwFMax != null) query.set('hw_f_max', S.audioViz.hwFMax);
+    if (S.audioViz.seconds != null) query.set('seconds', S.audioViz.seconds);
+    const data = await api(`/api/audio/analyze?${query.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'audio/wav' },
+      body: file,
+    });
+    S.audioViz.data = data;
+    const qc = data.qc || {};
+    const durText = data.file_duration_s && data.file_duration_s > data.duration_s + 0.05
+      ? `${data.duration_s} / ${data.file_duration_s} s`
+      : `${data.duration_s} s`;
+    $('audioStatus').textContent =
+      `${data.path} · ${data.fs} Hz · ${durText} · ${data.band.describe}`;
+    $('audioQc').textContent = `${qc.status || '—'} · ${(qc.checks || []).length} 项检查`;
+    renderAudioViz();
+  } catch (err) {
+    $('audioStatus').textContent = `分析失败：${err.message}`;
+    toast(`分析失败：${err.message}`);
+  } finally {
+    S.audioViz.busy = false;
+    $('audioAnalyzeBtn').disabled = false;
+  }
+}
+
+function renderAudioViz() {
+  const data = S.audioViz.data;
+  if (!data) return;
+  renderAudioParams(data);
+  drawAudioWave(data);
+  drawAudioSpectrum(data);
+  drawAudioCsi(data);
+  drawAudioCarriers(data);
+  drawAudioMotion(data);
+  drawAudioBpm(data);
+}
+
+function renderAudioParams(data) {
+  const params = data.params || [];
+  $('audioParams').innerHTML = params.length
+    ? params.map((p) => {
+      const status = String(p.status || 'INFO').toLowerCase();
+      return `<div class="param-row">
+        <span>${esc(p.name)}</span>
+        <span><i class="pstat ${status}">${esc(p.status || 'INFO')}</i>${esc(p.value)}</span>
+      </div>`;
+    }).join('')
+    : '<p class="empty-note">没有可用参数</p>';
+
+  const events = data.events || [];
+  $('audioEvents').innerHTML = events.slice(0, 10).map((ev) =>
+    `<span class="ev-chip"><b>${fmt1(ev.t)} s</b> · ${esc(ev.kind)} · ${esc(ev.message)}</span>`
+  ).join('');
+}
+
+function audioSeries(t, values) {
+  return t.map((x, i) => ({ x, y: values[i] }));
+}
+
+function drawAudioWave(data) {
+  const canvas = $('audioWaveChart');
+  const wv = data.waveform || {};
+  if (!wv.t || !wv.t.length) { drawEmpty(canvas, '无波形数据'); return; }
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h);
+  const xMax = Math.max(0.01, data.duration_s);
+  let peak = 0;
+  for (let i = 0; i < wv.t.length; i++) {
+    peak = Math.max(peak, Math.abs(wv.max[i]), Math.abs(wv.min[i]));
+  }
+  const yMax = Math.max(1e-6, peak * 1.08);
+  drawAxes(ctx, rect, 0, xMax, -yMax, yMax, {
+    fmtX: (v) => `${v.toFixed(1)}s`,
+    fmtY: (v) => v.toFixed(2),
+  });
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.l, rect.t, rect.w, rect.h);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.moveTo(xOf(wv.t[0], rect, 0, xMax), yOf(wv.max[0], rect, -yMax, yMax));
+  for (let i = 1; i < wv.t.length; i++) {
+    ctx.lineTo(xOf(wv.t[i], rect, 0, xMax), yOf(wv.max[i], rect, -yMax, yMax));
+  }
+  for (let i = wv.t.length - 1; i >= 0; i--) {
+    ctx.lineTo(xOf(wv.t[i], rect, 0, xMax), yOf(wv.min[i], rect, -yMax, yMax));
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(78, 161, 255, 0.28)';
+  ctx.fill();
+  ctx.restore();
+
+  const rms = audioSeries(wv.t, wv.rms);
+  drawSeries(ctx, rms, rect, 0, xMax, -yMax, yMax, '#f2b35c', 1.1);
+  drawSeries(ctx, rms.map((p) => ({ x: p.x, y: p.y == null ? null : -p.y })),
+    rect, 0, xMax, -yMax, yMax, '#f2b35c', 1.1);
+  $('audioWaveFoot').textContent = `峰值 ${peak.toFixed(3)} · ${data.fs} Hz`;
+}
+
+function drawAudioSpectrum(data) {
+  const canvas = $('audioSpectrumChart');
+  const sp = data.spectrum || {};
+  if (!sp.f_hz || !sp.f_hz.length) { drawEmpty(canvas, '无频谱数据'); return; }
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h);
+  const xMax = data.fs / 2000;
+  const peak = Math.max(...sp.db);
+  const yMax = peak + 3;
+  const yMin = Math.max(peak - 80, Math.min(...sp.db));
+  drawAxes(ctx, rect, 0, xMax, yMin, yMax, {
+    fmtX: (v) => `${v.toFixed(1)}k`,
+    fmtY: (v) => v.toFixed(0),
+  });
+
+  const band = data.band || {};
+  const x0 = xOf(band.sweep_lo / 1000, rect, 0, xMax);
+  const x1 = xOf(band.sweep_hi / 1000, rect, 0, xMax);
+  ctx.save();
+  ctx.fillStyle = 'rgba(78, 161, 255, 0.12)';
+  ctx.fillRect(x0, rect.t, Math.max(1, x1 - x0), rect.h);
+  ctx.strokeStyle = 'rgba(78, 161, 255, 0.32)';
+  ctx.lineWidth = 0.7;
+  for (const f of (data.probe && data.probe.carriers) || []) {
+    const x = xOf(f / 1000, rect, 0, xMax);
+    ctx.beginPath();
+    ctx.moveTo(x, rect.t);
+    ctx.lineTo(x, rect.b);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  drawSeries(ctx, audioSeries(sp.f_hz.map((f) => f / 1000), sp.db),
+    rect, 0, xMax, yMin, yMax, '#68d6a8', 1.1);
+  $('audioSpecFoot').textContent =
+    `${(band.f_lo || 0) / 1000}–${(band.f_hi || 0) / 1000} kHz · ${band.n_carriers || 0} 载波`;
+}
+
+function drawAudioCsi(data) {
+  const canvas = $('audioCsiChart');
+  const csi = data.csi || {};
+  if (!csi.amp || !csi.amp.length) { drawEmpty(canvas, '未找到可用的 CSI'); return; }
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h);
+  const rows = csi.amp[0].length;
+  const cols = csi.amp.length;
+  const values = [];
+  for (const row of csi.amp) for (const v of row) values.push(v);
+  values.sort((a, b) => a - b);
+  const top = values[Math.max(0, Math.floor(values.length * 0.95))] || 1;
+  const t0 = csi.t[0];
+  const t1 = csi.t[cols - 1];
+  const cellW = rect.w / cols;
+  const cellH = rect.h / rows;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.l, rect.t, rect.w, rect.h);
+  ctx.clip();
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const v = clamp(csi.amp[c][r] / Math.max(top, 1e-9), 0, 1);
+      ctx.fillStyle = heatColor(v);
+      ctx.fillRect(rect.l + c * cellW, rect.b - (r + 1) * cellH,
+        Math.ceil(cellW) + 0.6, Math.ceil(cellH) + 0.6);
+    }
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = '#5d6b80';
+  ctx.font = '9.5px "JetBrains Mono", Consolas, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (let i = 0; i <= 4; i++) {
+    const t = t0 + (t1 - t0) * i / 4;
+    ctx.fillText(`${t.toFixed(1)}s`, rect.l + rect.w * i / 4, rect.b + 7);
+  }
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const hz = csi.carrier_hz || [];
+  ctx.fillText(`${hz.length ? (hz[0] / 1000).toFixed(1) : '?'}k`, rect.l - 7, rect.b);
+  ctx.fillText(`${hz.length ? (hz[hz.length - 1] / 1000).toFixed(1) : '?'}k`,
+    rect.l - 7, rect.t + 4);
+  ctx.restore();
+  $('audioCsiFoot').textContent = `${cols} 帧 × ${rows} 载波`;
+}
+
+function drawAudioCarriers(data) {
+  const canvas = $('audioCarrierChart');
+  const car = data.carriers || {};
+  if (!car.power_db || !car.power_db.length) { drawEmpty(canvas, '无载波数据'); return; }
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h);
+  const n = car.power_db.length;
+  const yMin = Math.max(-60, Math.min(...car.power_db) - 5);
+  const yMax = 2;
+  drawAxes(ctx, rect, 0, n, yMin, yMax, {
+    fmtX: (v) => `${Math.round(v)}`,
+    fmtY: (v) => `${v.toFixed(0)}`,
+    xTicks: Math.min(6, n),
+  });
+  const barW = Math.max(2, rect.w / n * 0.72);
+  const zeroY = yOf(0, rect, yMin, yMax);
+  for (let i = 0; i < n; i++) {
+    const x = xOf(i + 0.5, rect, 0, n) - barW / 2;
+    const y = yOf(clamp(car.power_db[i], yMin, yMax), rect, yMin, yMax);
+    ctx.fillStyle = car.used && car.used[i] ? 'rgba(78, 161, 255, 0.75)' : 'rgba(255, 96, 112, 0.8)';
+    ctx.fillRect(x, Math.min(y, zeroY), barW, Math.max(1, Math.abs(zeroY - y)));
+  }
+  const pruned = (car.used || []).filter((u) => !u).length;
+  $('audioCarrierFoot').textContent = `剔除 ${pruned} / ${n}`;
+}
+
+function drawAudioMotion(data) {
+  const canvas = $('audioMotionChart');
+  const tr = data.trends || {};
+  if (!tr.motion_ratio || !tr.motion_ratio.length) { drawEmpty(canvas, '无判决数据'); return; }
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h);
+  const t1 = Math.max(0.01, tr.t[tr.t.length - 1]);
+  const threshold = tr.threshold == null ? 0.15 : tr.threshold;
+  const peak = Math.max(1.2, threshold * 1.7,
+    ...tr.motion_ratio.filter((v) => v != null));
+  const yMax = niceCeil(peak, 0.1);
+  drawAxes(ctx, rect, 0, t1, 0, yMax, {
+    fmtX: (v) => `${v.toFixed(1)}s`,
+    fmtY: (v) => v.toFixed(2),
+  });
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(242, 179, 92, 0.6)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  const yT = yOf(threshold, rect, 0, yMax);
+  ctx.moveTo(rect.l, yT);
+  ctx.lineTo(rect.r, yT);
+  ctx.stroke();
+  ctx.restore();
+
+  const pts = audioSeries(tr.t, tr.motion_ratio);
+  drawSeries(ctx, pts, rect, 0, t1, 0, yMax, '#f2b35c', 1.4);
+  if (tr.motion) {
+    const on = pts.filter((p, i) => tr.motion[i] && p.y != null);
+    drawDots(ctx, on, rect, 0, t1, 0, yMax, 'rgba(255, 96, 112, 0.85)', 1.8, 1);
+  }
+  // 运动证据尚未出现时全部为 null，展开空数组会得到 -Infinity。
+  const ratios = tr.motion_ratio.filter((v) => v != null);
+  const maxText = ratios.length ? ratios.reduce((a, b) => Math.max(a, b), -Infinity).toFixed(2) : '—';
+  $('audioMotionFoot').textContent =
+    `阈值 ${threshold.toFixed(2)} · 最大 ${maxText}`;
+}
+
+function drawAudioBpm(data) {
+  const canvas = $('audioBpmChart');
+  const tr = data.trends || {};
+  if (!tr.bpm || !tr.bpm.length) { drawEmpty(canvas, '无呼吸率数据'); return; }
+  const { ctx, w, h } = setupCanvas(canvas);
+  const rect = plotRect(w, h);
+  const t1 = Math.max(0.01, tr.t[tr.t.length - 1]);
+  drawAxes(ctx, rect, 0, t1, 0, 80, {
+    fmtX: (v) => `${v.toFixed(1)}s`,
+    fmtY: (v) => `${Math.round(v)}`,
+  });
+  drawSeries(ctx, audioSeries(tr.t, tr.bpm), rect, 0, t1, 0, 80, '#68d6a8', 1.4);
+  const vals = tr.bpm.filter((v) => v != null);
+  const median = vals.length ? vals.slice().sort((a, b) => a - b)[Math.floor(vals.length / 2)] : null;
+  $('audioBpmFoot').textContent = median == null ? '—' : `中位数 ${median.toFixed(1)} BPM`;
+}
+

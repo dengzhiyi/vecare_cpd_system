@@ -255,11 +255,18 @@ def make_probe(
 # WAV 读写（仅使用标准库）
 # ---------------------------------------------------------------------------
 
-def read_wav(path: str | Path, target_fs: int | None = None) -> tuple[np.ndarray, int]:
+def read_wav(
+    path: str | Path,
+    target_fs: int | None = None,
+    max_seconds: float | None = None,
+) -> tuple[np.ndarray, int]:
     """把 WAV 文件读成 [-1, 1] 范围内的单声道 float64。
 
     支持 8/16/24/32 位 PCM。浮点 WAV 会被拒绝，并给出转换提示，因为标准库
     ``wave`` 模块无法解析它们。
+
+    ``max_seconds`` 只读取文件开头的一段，用于分析超长录音时限制耗时；
+    默认 ``None`` 读取完整文件。
     """
     path = Path(path)
     try:
@@ -267,7 +274,10 @@ def read_wav(path: str | Path, target_fs: int | None = None) -> tuple[np.ndarray
             fs = w.getframerate()
             nch = w.getnchannels()
             sw = w.getsampwidth()
-            raw = w.readframes(w.getnframes())
+            n_frames = w.getnframes()
+            if max_seconds is not None and max_seconds > 0:
+                n_frames = min(n_frames, int(round(float(max_seconds) * fs)))
+            raw = w.readframes(n_frames)
     except wave.Error as exc:
         raise RuntimeError(
             f"{path.name}: unsupported WAV encoding ({exc}). "

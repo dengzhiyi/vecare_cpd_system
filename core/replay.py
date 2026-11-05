@@ -118,6 +118,7 @@ def load_csi(
     carriers: np.ndarray | None = None,
     min_peak_ratio: float = 0.2,
     hw_f_max: float | None = None,
+    max_seconds: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
     """读取一个 WAV，并返回 ``(amplitude, times, meta)``。
 
@@ -127,8 +128,10 @@ def load_csi(
     ``hw_f_max`` 依据硬件可用上限来规划载波频带，而不是采用论文的 23.5 kHz。
     不传它时，16 kHz 的驱动器会被要求提供它无法发出的载波 —— 见
     ``config.plan_band``。
+
+    ``max_seconds`` 只分析文件开头的一段，供超长录音的可视化使用。
     """
-    x, native_fs = read_wav(path, target_fs=fs)
+    x, native_fs = read_wav(path, target_fs=fs, max_seconds=max_seconds)
     band = plan_band(hw_f_max)
     if 2 * band.sweep_hi >= native_fs:
         raise RuntimeError(
@@ -137,8 +140,6 @@ def load_csi(
             f"{2*band.sweep_hi/1000:.1f} kHz of Nyquist bandwidth. Record at 48 kHz."
         )
     probe = probe or make_probe(fs=native_fs, hw_f_max=hw_f_max)
-
-    probe = probe or make_probe(fs=native_fs)
     starts, sync = frame_offsets(x, probe, min_ratio=min_peak_ratio)
     if starts.size < 2 or sync["match_ratio"] < 9.0:
         raise RuntimeError(
@@ -202,6 +203,7 @@ def check_audio(
     path: str | Path,
     fs: int | None = None,
     hw_f_max: float | None = None,
+    max_seconds: float | None = None,
 ) -> dict:
     """判定前的录音质量门：只检查音频前端，不运行检测器。
 
@@ -211,6 +213,9 @@ def check_audio(
 
     ``fs`` 仅用于重采样试听；真实采集应保持原生采样率，所以原生采样率低于
     48 kHz 一律判 FAIL，即使重采样后能跑通。
+
+    ``max_seconds`` 只检查文件开头的一段；时长一项仍按文件头报告的完整时长
+    判定，因此截取分析不会把一段长录音误判成“太短”。
     """
     path = Path(path)
     checks: list[dict] = []
@@ -221,7 +226,7 @@ def check_audio(
             channels = w.getnchannels()
             width = w.getsampwidth()
             n_frames = w.getnframes()
-        x, used_fs = read_wav(path, target_fs=fs)
+        x, used_fs = read_wav(path, target_fs=fs, max_seconds=max_seconds)
     except (wave.Error, RuntimeError) as exc:
         return {
             "path": str(path),
@@ -276,7 +281,7 @@ def check_audio(
 
     meta = None
     try:
-        _, _, meta = load_csi(path, fs=fs, hw_f_max=hw_f_max)
+        _, _, meta = load_csi(path, fs=fs, hw_f_max=hw_f_max, max_seconds=max_seconds)
     except RuntimeError as exc:
         checks.append(_check("帧同步", "FAIL", str(exc)))
     else:

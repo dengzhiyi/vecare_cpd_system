@@ -17,6 +17,11 @@
   GET  /api/sessions                  已记录的会话
   GET  /api/sessions/<id>             回放数据（meta + frames + events）
   GET  /api/sessions/<id>/download/<f> 下载 JSONL / meta
+  POST /api/audio/analyze?hw_f_max=18000&name=capture.wav&seconds=60
+                                      上传 WAV（请求体为原始字节），返回波形、
+                                      频谱、CSI 与关键参数，供「音频可视化」页
+                                      使用；seconds 只分析开头一段，缺省为
+                                      完整文件
 """
 from __future__ import annotations
 
@@ -44,6 +49,7 @@ from core.config import (  # noqa: E402
     PRESENCE_RATIO,
     plan_band,
 )
+from core.audio_viz import analyze_bytes  # noqa: E402
 from core.scenarios import SCENARIOS, list_scenarios  # noqa: E402
 from engine import SimulationEngine  # noqa: E402
 
@@ -52,6 +58,8 @@ WEB_DIR = BASE_DIR / "web"
 ENGINE = SimulationEngine(BASE_DIR / "data" / "sessions")
 
 STATIC_FILES = {"index.html", "styles.css", "app.js"}
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+MAX_ANALYZE_SECONDS = 3600.0
 
 # UI 可以提供的硬件上限。None 表示论文自身的频带；其余为我们实际遇到的驱动
 # 规格（见 README 的“硬件带宽受限”）。plan_band 会拒绝载波少于四个的上限
@@ -114,6 +122,58 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         raw = self.rfile.read(length)
         return json.loads(raw.decode("utf-8"))
+
+    def _analyze_upload(self, parsed) -> None:
+        """接收原始 WAV 字节并返回音频可视化数据。
+
+        这里不走 multipart：前端直接把 File 作为请求体发送，服务端只需读一次
+        Content-Length，避免为标准库手写一个 multipart 解析器。
+        """
+        query = parse_qs(parsed.query)
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0:
+            self._send_json({"error": "空请求体：请上传 WAV 文件"}, 400)
+            return
+        if length > MAX_UPLOAD_BYTES:
+            self._send_json({"error": "文件过大：上限 200 MB"}, 413)
+            return
+        raw = self.rfile.read(length)
+        if not raw.startswith(b"RIFF"):
+            self._send_json({"error": "只支持 WAV（RIFF）文件"}, 400)
+            return
+
+        hw_text = _first(query, "hw_f_max", "")
+        hw_f_max: float | None = None
+        if hw_text not in ("", "null", "None"):
+            try:
+                hw_f_max = float(hw_text)
+            except ValueError:
+                self._send_json({"error": f"invalid hw_f_max: {hw_text}"}, 400)
+                return
+            if hw_f_max not in BAND_CHOICES:
+                valid = [int(v) for v in BAND_CHOICES if v is not None]
+                self._send_json({"error": f"hw_f_max must be null or one of {valid}"}, 400)
+                return
+
+        seconds_text = _first(query, "seconds", "")
+        max_seconds: float | None = None
+        if seconds_text not in ("", "null", "None"):
+            try:
+                max_seconds = float(seconds_text)
+            except ValueError:
+                self._send_json({"error": f"invalid seconds: {seconds_text}"}, 400)
+                return
+            if not 0 < max_seconds <= MAX_ANALYZE_SECONDS:
+                self._send_json(
+                    {"error": f"seconds must be in (0, {MAX_ANALYZE_SECONDS:.0f}]"},
+                    400,
+                )
+                return
+
+        result = analyze_bytes(raw, hw_f_max=hw_f_max, max_seconds=max_seconds)
+        name = unquote(_first(query, "name", "upload.wav"))
+        result["path"] = Path(name).name
+        self._send_json(result)
 
     # ------------------------------------------------------------------
     def do_GET(self) -> None:  # noqa: N802
@@ -189,7 +249,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         try:
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
+            if path == "/api/audio/analyze":
+                self._analyze_upload(parsed)
+                return
             body = self._read_json()
 
             if path == "/api/live/start":

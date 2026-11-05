@@ -13,7 +13,10 @@
     # 4. 没有硬件也能验证这条链路
     python replay_audio.py --selfcheck
 
-    # 5. 存成可回放的会话，之后在 Web UI「日志回放」里看
+    # 5. 打开本地图形窗口查看波形、频谱、CSI 与关键参数
+    python replay_audio.py capture.wav --viz
+
+    # 6. 存成可回放的会话，之后在 Web UI「日志回放」里看
     python replay_audio.py capture.wav --save data/sessions
 
 介质来源：
@@ -217,6 +220,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="Kasami 探测音时长（默认 300 s）")
     ap.add_argument("--qc", action="store_true",
                     help="只做录音质量检查，不跑检测；FAIL 时退出码 1")
+    ap.add_argument("--viz", action="store_true",
+                    help="打开 matplotlib 图形窗口，查看波形 / 频谱 / CSI / 关键参数")
     ap.add_argument("--selfcheck", action="store_true", help="渲染全部场景并回放自检")
     ap.add_argument("--snr", type=float, default=35.0, help="自检渲染信噪比（默认 35 dB）")
     ap.add_argument("--out", default="data/selfcheck", help="自检输出目录")
@@ -253,6 +258,22 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print_qc(qc)
         return 0 if qc["passed"] else 1
+
+    if args.viz:
+        try:
+            from core.audio_viz import show_gui
+        except ImportError:
+            print("需要 matplotlib：pip install matplotlib", file=sys.stderr)
+            return 2
+        try:
+            show_gui(args.audio, hw_f_max=args.hw_f_max, fs=args.fs)
+        except Exception as exc:  # noqa: BLE001
+            # 无图形环境（SSH / CI）时给出可操作的提示，而不是 traceback。
+            print(f"无法打开图形窗口：{exc}", file=sys.stderr)
+            print("请在带桌面的环境运行，或改用 Web UI 的「音频可视化」页。",
+                  file=sys.stderr)
+            return 2
+        return 0
 
     result = run_wav(args.audio, sensitivity=args.sensitivity, fs=args.fs,
                      hw_f_max=args.hw_f_max)
