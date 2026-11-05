@@ -201,6 +201,28 @@ def test_unplanned_band_is_caught_by_runtime_pruning(tmp_path):
     assert result["metrics"]["alarm_at"] is None
 
 
+def test_four_second_noise_burst_is_not_a_breathing_child(tmp_path):
+    """4 s 噪声突发会绕过只看前 0.5 s 的脉冲检测，并伪装成一次呼吸。
+
+    它既不是 V 形（谷底在 2–5 s），也不是周期性的：长时判据必须在 8 s ACF
+    上看到绝对为负、且没有回升到呼吸峰的宽平台。
+    """
+    path = tmp_path / "burst.wav"
+    render_wav(path, "empty", duration_s=26.0, snr_db=40.0)
+    x, fs = read_wav(path)
+    rng = np.random.default_rng(5)
+    start, stop = int(8.0 * fs), int(12.0 * fs)
+    x[start:stop] += rng.standard_normal(stop - start) * float(np.max(np.abs(x))) * 0.9
+    write_wav(path, x, fs=fs)
+
+    result = run_wav(path)
+    metrics = result["metrics"]
+    assert not metrics["detected"], f"burst became presence at {metrics['presence_at']} s"
+    assert metrics["alarm_at"] is None
+    long_frames = [f for f in result["frames"] if f["features"].get("interference_long")]
+    assert long_frames, "the 4 s burst never entered the long-interference path"
+
+
 def test_offline_runner_reports_the_band_it_used():
     wide = run_offline("empty", hw_f_max=None)["metrics"]
     narrow = run_offline("empty", hw_f_max=16_000)["metrics"]

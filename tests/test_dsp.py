@@ -8,6 +8,7 @@ from core.dsp import (
     compute_features,
     find_breathing_peak,
     interference_pattern,
+    interference_pattern_long,
     motion_statistic,
     subcarrier_coherence,
 )
@@ -91,6 +92,54 @@ def test_find_breathing_peak_recovers_period():
     peak = find_breathing_peak(acf, FS, cfg, window_samples=8 * FS)
     assert peak["valid"]
     assert abs(peak["bpm"] - 18.0) < 2.0
+
+
+def test_isolated_side_lobe_is_not_accepted_as_breathing():
+    """安静环境里的 ACF 旁瓣：高度和突出度都够，但没有周期结构。
+
+    旧实现在这类曲线上给出 40 BPM、置信度 0.86 —— 一个从未有人呼吸过的
+    呼吸率。真实呼吸必须在谷底之后于 2*tau 处再现第二个峰；孤立旁瓣没有。
+    """
+    cfg = DetectorConfig()
+    t = np.arange(8 * FS) / FS
+    acf = 0.9 * np.exp(-t / 3.0) + 0.35 * np.exp(-((t - 1.5) ** 2) / (2 * 0.15 ** 2))
+    peak = find_breathing_peak(acf, FS, cfg, 8 * FS)
+    assert not peak["valid"]
+    assert peak["bpm"] is None
+
+
+def test_decaying_baseline_without_a_peak_is_rejected():
+    cfg = DetectorConfig()
+    t = np.arange(8 * FS) / FS
+    peak = find_breathing_peak(np.exp(-t / 2.0), FS, cfg, 8 * FS)
+    assert not peak["valid"]
+    assert peak["bpm"] is None
+
+
+def test_long_interference_needs_an_absolute_negative_lobe():
+    """长时判据不能只看“比 lag 0 掉了多少”。
+
+    δ 型 ACF（安静车厢）在 lag 0 为 1、其余为 0，任何噪声小凹都会满足
+    “掉了 0.9”，过去因此把空车标成长时干扰。真正的 4 s 突发抬高整窗均值，
+    在数秒 lag 上留下绝对为负的平台。
+    """
+    t = np.arange(int(8 * FS)) / FS
+    rng = np.random.default_rng(3)
+
+    quiet = np.zeros_like(t)
+    quiet[0] = 1.0
+    quiet[1:] = 0.004 * rng.standard_normal(t.size - 1)
+    assert not interference_pattern_long(quiet, FS)
+
+    burst = np.exp(-t / 0.15) - 0.18 * np.exp(-((t - 4.0) ** 2) / (2 * 1.2 ** 2))
+    assert interference_pattern_long(burst, FS)
+
+
+def test_periodic_breathing_is_not_long_interference():
+    """18 BPM 的 ACF 谷底很深，但它会在 2*tau 处回到呼吸量级的正峰。"""
+    for bpm in (12.0, 18.0, 30.0):
+        acf = _breathing_acf(bpm)
+        assert not interference_pattern_long(acf, FS), f"{bpm} BPM misread as interference"
 
 
 def test_breathing_rate_not_halved_above_45_bpm():

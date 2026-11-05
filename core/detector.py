@@ -48,6 +48,7 @@ class CPDDetector:
         self.motion_coherence = 0.0
         self.motion_detected = False
         self.interference = False
+        self.interference_long = False
 
         self.evidence = deque()          # (时间, 布尔值)
         self.presence = False
@@ -109,7 +110,7 @@ class CPDDetector:
         儿童持续的呼吸起伏吸收进背景。估计完成后即冻结；若座舱环境发生长期
         变化，应重新执行空车标定，而不是在线慢慢“学”成背景。
         """
-        if self.interference or self.presence or self.calibrated:
+        if self.interference or self.interference_long or self.presence or self.calibrated:
             return
         self._bg_energy.append(float(energy))
         self._bg_coherence.append(float(coherence))
@@ -153,6 +154,7 @@ class CPDDetector:
         coherence = float(motion.get("coherence", 0.0))
         self.motion_coherence = coherence
         self.interference = bool(motion.get("interference", False))
+        self.interference_long = bool(motion.get("interference_long", False))
 
         if self.background_source == "冷启动自适应":
             self._update_background(t, energy, coherence)
@@ -160,8 +162,13 @@ class CPDDetector:
         base = self.baseline_energy or max(energy, 1e-9)
         ratio = energy / base
         self.motion_ratio = ratio
+        # 长时突发本身也可能是真实体动；只有能量远超正常运动时才按干扰处置。
+        long_now = bool(
+            self.interference_long and ratio > self.cfg.interference_ratio_max
+        )
+        interference_now = bool(self.interference or long_now)
         motion_det = bool(
-            not self.interference
+            not interference_now
             and ratio > self.motion_threshold
             and coherence >= self.coherence_threshold
         )
@@ -207,8 +214,8 @@ class CPDDetector:
         self.breath_confidence = conf
 
         evidence = motion_det or breath_det
-        # 脉冲干扰会整帧作废（论文 §5）。
-        if self.interference:
+        # 脉冲干扰会整帧作废（论文 §5）；长时高能突发同样作废。
+        if interference_now:
             evidence = False
 
         self.motion_detected = motion_det
@@ -360,6 +367,7 @@ class CPDDetector:
             "motion_detected": bool(self.motion_detected),
             "motion_coherence": round(float(self.motion_coherence), 3),
             "interference": bool(self.interference),
+            "interference_long": bool(self.interference_long),
             "presence": self.presence,
             "presence_score": round(self.presence_score, 3),
             "presence_since": self.presence_since,

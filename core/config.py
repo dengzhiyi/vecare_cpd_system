@@ -154,6 +154,11 @@ BREATH_MAX_OVERLAP = 0.75    # 重叠低于约 25 % 时无偏 ACF 会失效
 BREATH_MIN_HEIGHT = 0.10
 BREATH_MIN_PROMINENCE = 0.05
 BREATH_CONF_THRESHOLD = 0.50
+# 单旁瓣否决：真实呼吸在首个峰之前有一个足够深的谷底；孤立旁瓣几乎不回落。
+BREATH_MIN_CONTRAST = 0.30
+# 若 2*tau 仍落在可观测 lag 内，要求那里也有一个像样的峰，否则视为非周期旁瓣。
+BREATH_HARMONIC_MIN_RATIO = 0.35
+BREATH_HARMONIC_TOLERANCE = 0.18
 
 # --- 判决 ------------------------------------------------------------------
 EVIDENCE_WINDOW_S = 5.0
@@ -168,6 +173,11 @@ CARRIER_HEALTH_S = 5.0
 EVIDENCE_GAP_RESET_S = 5.0   # 未确认存在时，新的一段证据会重新开始计算预算
 MRC_WEIGHT_FLOOR = 0.02      # 防止零/负增益让某个子载波失效
 INTERFERENCE_DEPTH = 0.35    # 用于抑制脉冲噪声的 V 形 ACF 深度
+LONG_INTERFERENCE_LAG_S = 6.0       # 长时瞬态检查覆盖 0.5–6 s
+LONG_INTERFERENCE_MIN_LAG_S = 0.5
+LONG_INTERFERENCE_DEPTH = 0.10      # 绝对谷底深度；δ 型 ACF 的噪声下凹不超过 0.05
+LONG_INTERFERENCE_RECOVERY = 0.30   # 0.5–6 s 内没有回到这个正峰，就不像周期呼吸
+INTERFERENCE_RATIO_MAX = 50.0       # 只有能量远超正常运动的持续事件才按长时干扰处置
 
 
 @dataclass
@@ -184,6 +194,10 @@ class DetectorConfig:
     breath_min_height: float = BREATH_MIN_HEIGHT
     breath_min_prominence: float = BREATH_MIN_PROMINENCE
     breath_conf_threshold: float = BREATH_CONF_THRESHOLD
+    breath_min_contrast: float = BREATH_MIN_CONTRAST
+    breath_harmonic_min_ratio: float = BREATH_HARMONIC_MIN_RATIO
+    breath_harmonic_tolerance: float = BREATH_HARMONIC_TOLERANCE
+    interference_ratio_max: float = INTERFERENCE_RATIO_MAX
     evidence_window_s: float = EVIDENCE_WINDOW_S
     presence_ratio: float = PRESENCE_RATIO
     response_budget_s: float = RESPONSE_BUDGET_S

@@ -55,6 +55,10 @@ _MLS_TAPS = {5: [5, 3], 6: [6, 5], 7: [7, 6], 8: [8, 6, 5, 4],
              13: [13, 12, 11, 8], 14: [14, 13, 12, 2], 15: [15, 14],
              16: [16, 15, 13, 4]}
 
+# 探测波形的载波均衡下限：最弱载波不能比最强载波低这么多。低于该值时，
+# 谱除法基本是噪声除以噪声，该载波在运行时会被裁剪，白白少一个分集支路。
+_PROBE_MIN_CONDITION_DB = -3.0
+
 
 @dataclass(frozen=True)
 class Probe:
@@ -91,18 +95,24 @@ def _mls_sequence(order: int, taps: list[int]) -> np.ndarray:
     for i in range(length):
         out[i] = reg[-1]
         fb = 0
+        # 抽头以多项式的幂次给出（x^n + x^k + 1），而寄存器下标从反馈端
+        # （reg[0]）开始计数，因此第 k 个抽头是 reg[k-1]，不是 reg[-k]。
+        # 用 reg[-k] 会把反馈端和输出端混在一起，得到的最长序列周期远小于
+        # 2^n-1，Kasami 的互相关上界也就不再成立。
         for t in taps:
-            fb ^= reg[-t]
+            fb ^= reg[t - 1]
         reg[1:] = reg[:-1]
         reg[0] = fb
     return out
 
 
 def _kasami_codes(order: int = 8) -> list[np.ndarray]:
-    """构造 Kasami 小集合：a 与 b 的循环移位异或。
+    """构造 Kasami 小集合：a 本身，以及 a 与 b 的循环移位异或。
 
     n 为偶数时，用抽因子 ``q = 2^(n/2)+1`` 从 m 序列得到短周期 b，再与 a
     异或，得到 ``2^(n/2)`` 条互相关有界的序列。order=8 时长度为 255。
+    基序列 a 必须包含在集合内，否则只有 2^(n/2)-1 条，工程上会白白少掉一条
+    （同时也是 PAPR 最低的那条候选）。
     """
     if order % 2 or order not in _MLS_TAPS:
         raise ValueError(f"Kasami needs an even order in {sorted(_MLS_TAPS)}")
@@ -114,7 +124,7 @@ def _kasami_codes(order: int = 8) -> list[np.ndarray]:
         if n % p == 0 and np.all(dec == np.tile(dec[:p], n // p))
     )
     b = np.tile(dec[:period], n // period)
-    return [a ^ np.roll(b, shift) for shift in range(period)]
+    return [a] + [a ^ np.roll(b, shift) for shift in range(period)]
 
 
 def _bandlimit(samples: np.ndarray, fs: float, f_lo: float, f_hi: float) -> np.ndarray:
@@ -140,8 +150,7 @@ def _kasami_waveform(fs: int, length: int, f_lo: float, f_hi: float, n_carriers:
     high_len = length * oversample
     n = np.arange(high_len)
     fc = 0.5 * (f_lo + f_hi)
-    best: np.ndarray | None = None
-    best_rms = -1.0
+    candidates: list[tuple[float, float, np.ndarray]] = []
 
     for code in codes:
         chips = code[(n * code.size) // high_len].astype(np.float64) * 2.0 - 1.0
@@ -168,13 +177,18 @@ def _kasami_waveform(fs: int, length: int, f_lo: float, f_hi: float, n_carriers:
             continue
         s /= peak
         rms = float(np.sqrt(np.mean(s ** 2)))
-        # 峰值归一化后 RMS 越高，PAPR 越低；选最“温和”的一条 Kasami 码。
-        if rms > best_rms:
-            best_rms, best = rms, s
+        # 一条码的单载波深零点可以被均衡器的钳位放大到最弱载波，这是设计期
+        # 缺陷（最弱载波退化成噪声计），与 PAPR 无关，必须先排除。
+        levels = np.abs(np.fft.rfft(s)[bins]) ** 2
+        worst_db = 10.0 * np.log10(float(np.min(levels)) / float(np.max(levels)))
+        candidates.append((worst_db, rms, s))
 
-    if best is None:
+    if not candidates:
         raise ValueError("could not build a Kasami probe for this band")
-    return best
+    # 先保住每个载波都有可用功率，再在合格者中选最“温和”（低 PAPR）的一条。
+    good = [c for c in candidates if c[0] >= _PROBE_MIN_CONDITION_DB]
+    pick = max(good, key=lambda c: c[1]) if good else max(candidates, key=lambda c: c[0])
+    return pick[2]
 
 
 def make_probe(

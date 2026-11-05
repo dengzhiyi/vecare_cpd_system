@@ -8,6 +8,9 @@ import numpy as np
 import pytest
 
 from core.audio import (
+    _MLS_TAPS,
+    _kasami_codes,
+    _mls_sequence,
     carrier_bins,
     csi_amplitude,
     estimate_csi,
@@ -19,6 +22,49 @@ from core.audio import (
 )
 from core.config import CSI_FS, F_HIGH, F_LOW, N_SUBCARRIERS
 from core.replay import check_audio, export_probe, load_csi, render_wav, run_wav
+
+
+def _corr(x, y, shift):
+    """两条 0/1 序列在循环移位下的 ±1 相关值。"""
+    n = x.size
+    diff = int(np.sum((x ^ np.roll(y, shift)).astype(np.int16)))
+    return n - 2 * diff
+
+
+# ---------------------------------------------------------------------------
+# 探测码：LFSR 与 Kasami
+# ---------------------------------------------------------------------------
+
+def test_every_lfsr_polynomial_produces_a_true_m_sequence():
+    """反馈端与输出端必须分开，否则 12 条多项式都不是 m 序列。
+
+    真正的 m 序列有两个可判定的性质：一个周期内 0/1 各半，且周期自相关在
+    所有非零 lag 上恰为 -1。旧实现用 ``reg[-t]``，把反馈端算进了输出端，
+    序列仍然“看起来随机”，但周期自相关旁瓣高达几十，Kasami 的
+    ``2^(n/2)+1`` 互相关上界随之失效。
+    """
+    for order, taps in _MLS_TAPS.items():
+        seq = _mls_sequence(order, taps)
+        assert seq.size == 2 ** order - 1
+        assert int(seq.sum()) == 2 ** (order - 1), f"order {order} is not balanced"
+        sidelobes = [_corr(seq, seq, k) for k in range(1, seq.size)]
+        assert max(abs(v) for v in sidelobes) == 1, f"order {order} is not max-length"
+
+
+def test_kasami_small_set_has_the_expected_size_and_cross_correlation():
+    """小集合含基序列 a，共 2^(n/2) 条，互相关不超过 2^(n/2)+1。"""
+    order = 8
+    codes = _kasami_codes(order)
+    bound = 2 ** (order // 2) + 1
+    assert len(codes) == 2 ** (order // 2) == 16
+    assert len({tuple(c) for c in codes}) == len(codes), "duplicate codes"
+    worst = max(
+        abs(_corr(codes[i], codes[j], k))
+        for i in range(len(codes))
+        for j in range(i + 1, len(codes))
+        for k in range(codes[0].size)
+    )
+    assert worst <= bound, f"cross-correlation {worst} exceeds {bound}"
 
 
 def _render_frame(probe, delays, gains):

@@ -15,7 +15,15 @@ import numpy as np
 from scipy.fft import next_fast_len, rfft, irfft
 from scipy.signal import find_peaks
 
-from .config import DetectorConfig, INTERFERENCE_DEPTH, MRC_WEIGHT_FLOOR
+from .config import (
+    DetectorConfig,
+    INTERFERENCE_DEPTH,
+    LONG_INTERFERENCE_DEPTH,
+    LONG_INTERFERENCE_LAG_S,
+    LONG_INTERFERENCE_MIN_LAG_S,
+    LONG_INTERFERENCE_RECOVERY,
+    MRC_WEIGHT_FLOOR,
+)
 
 
 def _detrend(X: np.ndarray) -> np.ndarray:
@@ -116,6 +124,35 @@ def interference_pattern(acf_mean: np.ndarray, depth: float = INTERFERENCE_DEPTH
     return float(min(seg[0], seg[-1]) - seg[k]) > depth
 
 
+def interference_pattern_long(acf: np.ndarray, fs: int) -> bool:
+    """§5 的长时版本：0.5–6 s 内出现绝对为负的宽平台，且区间内没有呼吸正峰。
+
+    短 V 检测只看前 0.5 s，4 s 的噪声突发在 1 s 运动窗里根本看不到谷底。
+    这里改用 8 s 呼吸 ACF：持续噪声抬高了整窗均值，使窗外样本整体变为负值，
+    于是 ACF 在数秒的 lag 上留下一个 *绝对* 为负的平台；真实呼吸一定会在 tau
+    处回升到接近 1 的正峰。
+
+    判据用绝对高度而不是“从 1 掉了多少”：安静车厢的 ACF 与 δ 函数无异，
+    任何噪声小凹都满足“下降 0.9”，过去因此把空车误标成长时干扰。现在要求
+    谷底自身低于 ``-LONG_INTERFERENCE_DEPTH``，并且 0.5–6 s 内再没有呼吸量级
+    的正峰（``LONG_INTERFERENCE_RECOVERY``；18 BPM 的首峰约为 0.5–0.8，
+    4 s 噪声的残余起伏不超过 0.25）。
+
+    该标志仍需由检测器用能量比值门控，以免把缓慢的真实体动误判成干扰。
+    """
+    n = min(len(acf), int(round(LONG_INTERFERENCE_LAG_S * fs)) + 1)
+    start = int(round(LONG_INTERFERENCE_MIN_LAG_S * fs))
+    if n <= start + 2:
+        return False
+    seg = np.asarray(acf[:n], dtype=np.float64)
+    k = int(np.argmin(seg[start:n])) + start
+    if float(seg[k]) > -LONG_INTERFERENCE_DEPTH:
+        return False
+    # 呼吸的正峰可能出现在谷底之前（例如 18 BPM 的首峰在 3.3 s，而更深的下凹
+    # 在 5 s），因此要看整个 0.5–6 s，而不只是谷底之后的尾巴。
+    return float(np.max(seg[start:])) < LONG_INTERFERENCE_RECOVERY
+
+
 def motion_features(
     X: np.ndarray,
     fs: int,
@@ -168,15 +205,16 @@ def _parabolic_peak(x: np.ndarray, idx: int) -> float:
     return float(idx + 0.5 * (y0 - y2) / denom)
 
 
-def _descend_to_fundamental(idx: np.ndarray, heights: np.ndarray, depth: int = 4) -> int:
-    """选取基频峰，而不是它的谐波。
+def _descend_to_fundamental(start: int, idx: np.ndarray, heights: np.ndarray, depth: int = 4) -> int:
+    """从给定峰出发选取基频峰，而不是它的谐波。
 
     周期信号会在 tau_b, 2*tau_b, 3*tau_b 处出现高度几乎相等的峰，因此
     “最强的峰”可能是其中任意一个，而“最早的峰”可能是与呼吸无关的缓慢摆动。
-    换一种做法：向下查找，如果在 lag/2 附近存在一个强度相当的峰，就说明当前峰
-    是谐波。
+    换一种做法：从已经选中的峰向下查找，如果在 lag/2 附近存在一个强度相当的峰，
+    就说明当前峰是谐波。只能向下走 —— 从最强峰出发会反向把 40 BPM 的首峰
+    误判成它的三次谐波（13 BPM）。
     """
-    best = int(np.argmax(heights))
+    best = int(start)
     for _ in range(depth):
         half = float(idx[best]) / 2.0
         if half < idx[0]:
@@ -250,6 +288,12 @@ def find_breathing_peak(
     keep = [i for i in range(len(idx)) if heights[i] >= heights[best] * 0.85]
     chosen = keep[0] if keep else best
 
+    # 若选中的其实是一个谐波，向下找到它的基频。过去这个函数存在但从未接入，
+    # 导致“最早且强度接近”的启发式是唯一的基频保护。
+    fund = _descend_to_fundamental(chosen, idx, heights)
+    if fund != chosen and heights[fund] >= 0.55 * heights[chosen]:
+        chosen = fund
+
     fine = _parabolic_peak(combined, int(idx[chosen]))
     lag_s = fine / fs
     bpm = 60.0 / lag_s if lag_s > 0 else 0.0
@@ -263,6 +307,10 @@ def find_breathing_peak(
     conf = float(np.clip(conf, 0.0, 1.0))
 
     valid = bool(10.0 <= bpm <= 75.0)
+    if valid and not _peak_is_periodic(combined, idx, heights, chosen, lag_max, cfg):
+        # 单个孤立旁瓣也能满足高度/突出度，但它不是呼吸：要么前面没有足够深
+        # 的谷底，要么 2*tau 处没有第二个峰。
+        valid = False
     return {
         "valid": valid,
         "bpm": float(bpm) if valid else None,
@@ -272,6 +320,32 @@ def find_breathing_peak(
         "prominence": prominence,
         "peak_idx": int(idx[chosen]),
     }
+
+
+def _peak_is_periodic(
+    combined: np.ndarray,
+    peak_lags: np.ndarray,
+    peak_heights: np.ndarray,
+    chosen: int,
+    lag_max: int,
+    cfg: DetectorConfig,
+) -> bool:
+    """一个可信的呼吸峰必须同时满足谷底深度和（可观测时的）二次谐波。"""
+    lag = int(peak_lags[chosen])
+    height = float(peak_heights[chosen])
+    trough = float(np.min(combined[:lag + 1]))
+    if height - trough < cfg.breath_min_contrast:
+        return False
+    two_lag = 2 * lag
+    tolerance = cfg.breath_harmonic_tolerance * two_lag
+    if two_lag + tolerance > lag_max:
+        # 8 s 窗看不到第二个周期（例如 10–20 BPM，或 2*tau 恰好落在边界上），
+        # 此时只能依赖谷底深度。
+        return True
+    near = np.abs(peak_lags - two_lag) <= tolerance
+    if not np.any(near):
+        return False
+    return bool(np.max(peak_heights[near]) >= cfg.breath_harmonic_min_ratio * height)
 
 
 def compute_features(
@@ -297,6 +371,7 @@ def compute_features(
             "energy": motion["energy"],
             "coherence": motion["coherence"],
             "interference": motion["interference"],
+            "interference_long": False,
             "peak": dict(_INVALID_PEAK),
             "acf_display": [],
             "acf_step_s": 0.04,
@@ -314,6 +389,7 @@ def compute_features(
     combined = combine_acf(acf_b, weights)
 
     peak = find_breathing_peak(combined, fs, cfg, amp_breath.shape[0])
+    interference_long = interference_pattern_long(combined, fs)
 
     step = max(1, int(round(0.04 * fs)))
     acf_display = combined[::step].astype(float).tolist()
@@ -323,6 +399,7 @@ def compute_features(
         "energy": motion["energy"],
         "coherence": motion["coherence"],
         "interference": motion["interference"],
+        "interference_long": interference_long,
         "peak": peak,
         "acf_display": acf_display,
         "acf_step_s": step / fs,

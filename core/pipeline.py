@@ -112,6 +112,7 @@ class SASPipeline:
                 "motion_energy": round(float(features["energy"]), 4),
                 "motion_coherence": round(float(features["coherence"]), 3),
                 "interference": bool(features["interference"]),
+                "interference_long": bool(features.get("interference_long", False)),
                 "gains": [round(float(g), 4) for g in gains],
                 "bpm_raw": None if peak.get("bpm") is None else round(float(peak["bpm"]), 1),
                 "confidence": round(float(peak.get("confidence", 0.0)), 3),

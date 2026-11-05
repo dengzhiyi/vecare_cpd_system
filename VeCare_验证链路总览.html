@@ -204,7 +204,7 @@ footer{
     它和实录音频最终都会变成同一个 24×50 Hz 的 CSI 振幅矩阵，之后的每一行代码完全相同。
   </p>
   <div class="chips">
-    <span class="chip"><b>66</b> 项测试通过</span>
+    <span class="chip"><b>81</b> 项测试通过</span>
     <span class="chip"><b>7</b> 个验证场景</span>
     <span class="chip">响应 <b>10.0</b> s</span>
     <span class="chip">CSI <b>24 × 50 Hz</b></span>
@@ -346,7 +346,7 @@ footer{
 
   <p>也可以用命令行批量核对：</p>
   <div class="code">python3 replay_audio.py --selfcheck   <span class="c"># 仿真 → WAV → 再回放，验证音频前端</span>
-python3 -m pytest tests -q            <span class="c"># 70 项自动测试</span></div>
+python3 -m pytest tests -q            <span class="c"># 81 项自动测试</span></div>
 
   <div class="note"><b>仿真的特点：</b>完全可控、可重复、16× 加速，几分钟就能跑完几个场景；缺点是声音模型理想化，没有真实混响、扬声器失真和复杂人际干扰。</div>
 
@@ -1246,7 +1246,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
     但仿真器的目标反射是频率平坦的（各子载波目标强度相同），权重分化只来自噪声实现。要验证论文的 MRC 贡献，必须引入频率选择性目标 RCS 与多径衰落。
   </p>
   <p>
-    <b>BPM 精度只能内部看。</b>0.21–1.96 的 MAE 跑在正弦呼吸的仿真信道上，没有真实婴儿的呼吸不规则性、体动伪影和多人干扰。
+    <b>BPM 精度只能内部看。</b>0.23–1.30 的 MAE 跑在正弦呼吸的仿真信道上，没有真实婴儿的呼吸不规则性、体动伪影和多人干扰。
   </p>
   <p>
     <b>带宽受限的数字同样只有仿真支撑。</b>第 07 节的 18/16 kHz 结论来自「仿真信道 + 理想 6 阶低通」，
@@ -1255,7 +1255,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 70 项<br>
+  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 81 项<br>
   代码位置：vecare_cpd_system（仓库根目录）　·　文档生成于 2026-11-03
 </footer>
 
