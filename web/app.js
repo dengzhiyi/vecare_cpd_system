@@ -12,7 +12,7 @@ const S = {
   selected: 'sleeping',
   sensitivity: 1.0,
   speed: 1.0,
-  hwFMax: null,     // null 表示论文频带；否则为 -3 dB 硬件频响上限（Hz）
+  hwFMax: 20000,    // 默认 20 kHz；可选 24k/20k/18k/16k/14k
   bands: [],
   truthVisible: true,
   live: {
@@ -24,7 +24,7 @@ const S = {
     index: 0, playing: false, speed: 1, timer: null,
   },
   audio: { ctx: null, lastBeep: 0 },
-  audioViz: { hwFMax: 18000, seconds: null, data: null, busy: false },
+  audioViz: { hwFMax: 20000, seconds: null, data: null, busy: false },
 };
 
 const LIVE_WINDOW_S = 30;
@@ -132,7 +132,7 @@ function bindUI() {
     const chip = e.target.closest('.chip');
     if (!chip) return;
     const raw = chip.dataset.hw;
-    S.hwFMax = raw == null || raw === '' ? null : Number(raw);
+    S.hwFMax = raw == null || raw === '' ? 20000 : Number(raw);
     renderBandChips();
   });
 
@@ -140,7 +140,7 @@ function bindUI() {
     const chip = e.target.closest('.chip');
     if (!chip) return;
     const raw = chip.dataset.hw;
-    S.audioViz.hwFMax = raw == null || raw === '' ? null : Number(raw);
+    S.audioViz.hwFMax = raw == null || raw === '' ? 20000 : Number(raw);
     $('audioBandChips').querySelectorAll('.chip').forEach((c) => {
       c.classList.toggle('active', c === chip);
     });
@@ -280,21 +280,23 @@ function renderBandChips() {
   const box = $('bandChips');
   if (!box) return;
   if (!S.bands.length) {
-    box.innerHTML = '<button class="chip active" data-hw="">论文</button>';
+    box.innerHTML = '<button class="chip active" data-hw="20000">20k</button>';
     return;
   }
   box.innerHTML = S.bands.map((b) => `
     <button class="chip ${b.hw_f_max === S.hwFMax ? 'active' : ''}"
-            data-hw="${b.hw_f_max == null ? '' : b.hw_f_max}"
+            data-hw="${b.hw_f_max}"
             title="${esc(b.describe)}">${esc(b.label)}</button>
   `).join('');
   syncBandNote();
 }
 
 function syncBandNote() {
-  const band = S.bands.find((b) => b.hw_f_max === S.hwFMax) || S.bands[0];
+  const band = S.bands.find((b) => b.hw_f_max === S.hwFMax)
+    || S.bands.find((b) => b.hw_f_max === 20000)
+    || S.bands[0];
   if (!band) return;
-  $('bandValue').textContent = S.hwFMax == null ? '论文' : `${S.hwFMax / 1000}k`;
+  $('bandValue').textContent = `${band.hw_f_max / 1000}k`;
   $('bandRange').textContent = `${fmtKHz(band.f_lo_hz)}–${fmtKHz(band.f_hi_hz)} kHz`;
   $('bandCars').textContent = `${band.n_carriers} 路 · ${Math.round(band.spacing_hz)} Hz`;
 }
@@ -304,7 +306,7 @@ function syncBandNote() {
    - scenario：场景键（见 GET /api/scenarios）
    - sensitivity：检测灵敏度倍率
    - speed：仿真倍速（1/2/4/8/16）
-   - hw_f_max：硬件频响上限（null/14k/16k/18k/20k），决定载波频带
+   - hw_f_max：硬件频响上限（14k/16k/18k/20k/24k，默认 20k），决定载波频带
    后端创建 SimulationEngine 线程，按 50 Hz 合成 CSI 并驱动 SAS 检测器；
    返回 status.session_id，同时把本次运行写入 data/sessions 供回放。 */
 async function startMonitor() {

@@ -51,8 +51,11 @@ def test_probe_illuminates_every_carrier():
 
 
 def test_probe_refuses_a_sample_rate_below_the_probe_band():
+    # 默认 20 kHz 上限的探测带只到 18.7 kHz，44.1 kHz 录音已够用；
+    # 只有显式要求更宽的上限时才会撞上 Nyquist。
+    make_probe(fs=44100)
     with pytest.raises(ValueError):
-        make_probe(fs=44100)
+        make_probe(fs=44100, hw_f_max=24_000)
 
 
 def test_carrier_bins_sit_on_the_dft_grid():
@@ -154,7 +157,7 @@ def test_probe_export_is_playable(tmp_path):
 
 def test_low_sample_rate_recording_is_rejected(tmp_path):
     with pytest.raises(ValueError):
-        make_probe(fs=44100)
+        make_probe(fs=44100, hw_f_max=24_000)
     path = write_wav(tmp_path / "low.wav", np.zeros(22050), fs=22050)
     with pytest.raises(RuntimeError, match="Nyquist"):
         load_csi(path)

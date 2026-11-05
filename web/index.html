@@ -77,9 +77,9 @@
         </div>
 
         <div class="field">
-          <label>硬件频响上限 <output id="bandValue">论文</output></label>
+          <label>硬件频响上限 <output id="bandValue">20k</output></label>
           <div class="chips" id="bandChips"></div>
-          <div class="field-scale"><span id="bandRange">10.5–23.5 kHz</span><span id="bandCars">24 路 · 565 Hz</span></div>
+          <div class="field-scale"><span id="bandRange">10.5–18.5 kHz</span><span id="bandCars">24 路 · 348 Hz</span></div>
         </div>
 
         <div class="field">
@@ -374,12 +374,15 @@
           <input type="file" id="audioFile" accept=".wav,audio/wav">
           <span id="audioFileName">选择 WAV 录音</span>
         </label>
-        <div class="chips" id="audioBandChips">
-          <button class="chip" data-hw="">论文</button>
-          <button class="chip" data-hw="20000">20k</button>
-          <button class="chip active" data-hw="18000">18k</button>
-          <button class="chip" data-hw="16000">16k</button>
-          <button class="chip" data-hw="14000">14k</button>
+        <div class="audio-band">
+          <span class="audio-control-label">硬件频响上限</span>
+          <div class="chips" id="audioBandChips">
+            <button class="chip" data-hw="24000">24k</button>
+            <button class="chip active" data-hw="20000">20k</button>
+            <button class="chip" data-hw="18000">18k</button>
+            <button class="chip" data-hw="16000">16k</button>
+            <button class="chip" data-hw="14000">14k</button>
+          </div>
         </div>
         <label class="audio-length">
           <span>分析长度</span>
@@ -498,7 +501,7 @@
       <div class="about-grid">
         <div class="about-card">
           <h3>1 · 声学通道</h3>
-          <p>复用扬声器循环播放 20 ms 周期的 Kasami 探测音（255 位码片扩频，探测频带 10.3–23.7 kHz），单麦克风以 48 kHz 采样；每 20 ms 估计一次 CSI，子载波数随硬件频带规划（最多 24 个）。</p>
+          <p>复用扬声器循环播放 20 ms 周期的 Kasami 探测音（255 位码片扩频，探测频带默认 10.3–18.7 kHz，24k 档到 22.7 kHz），单麦克风以 48 kHz 采样；每 20 ms 估计一次 CSI，子载波数随硬件频带规划（最多 24 个）。</p>
           <code>H(f,t) = Σ<sub>r</sub> a<sub>r</sub>(t) exp(−j2πfτ<sub>r</sub>(t)) + N(f,t)</code>
         </div>
         <div class="about-card">

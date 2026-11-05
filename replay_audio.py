@@ -230,17 +230,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="只输出 JSON")
     ap.add_argument("--save", metavar="DIR", help="存成可回放会话（如 data/sessions）")
     ap.add_argument("--hw-f-max", type=float, default=None, metavar="HZ",
-                    help="扬声器+麦克风的 -3 dB 频响上限（如 18000）；不给则按论文 23.5 kHz")
+                    help="扬声器+麦克风的 -3 dB 频响上限（如 18000）；不给则按默认 20 kHz")
     args = ap.parse_args(argv)
 
     if args.emit_probe:
         info = export_probe(args.emit_probe, seconds=args.seconds, hw_f_max=args.hw_f_max)
+        band = plan_band(args.hw_f_max)
         print(json.dumps(info, ensure_ascii=False, indent=2))
         print(
             "\n用法：把它循环播放给座舱，同时录麦克风。\n"
             "  · 采样率必须与录音一致（默认 48 kHz）\n"
             "  · 录音不能开降噪 / 回声消除 / 自动增益\n"
-            "  · 播放设备要能覆盖 10.3–23.7 kHz（窄带器件请传 --hw-f-max）"
+            f"  · 播放设备要能覆盖 {band.sweep_lo / 1000:.1f}–"
+            f"{band.sweep_hi / 1000:.1f} kHz（窄带器件请传 --hw-f-max）"
         )
         return 0
 

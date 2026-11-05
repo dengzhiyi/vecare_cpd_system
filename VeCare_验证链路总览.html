@@ -573,7 +573,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
         <tr>
           <td><b>探测带边缘压在最外侧载波上</b></td>
           <td class="dim">Kasami 的带限过渡带正好落在最外侧载波，探针功率被削掉，该载波退化成噪声计</td>
-          <td class="dim">两侧各留 200 Hz 余量（10.3–23.7 kHz），再逐载波功率均衡，带内功率差 &lt; 3 dB</td>
+          <td class="dim">两侧各留 200 Hz 余量（默认 10.3–18.7 kHz，24k 档 10.3–22.7 kHz），再逐载波功率均衡，带内功率差 &lt; 3 dB</td>
         </tr>
       </tbody>
     </table>
@@ -695,7 +695,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 
   <h3>① 生成 Kasami 探测音（只做一次）</h3>
 
-  <div class="code"><span class="c"># 48 kHz / 20 ms 一周期 / 10.3–23.7 kHz / 255 位 Kasami 码片扩频</span>
+  <div class="code"><span class="c"># 48 kHz / 20 ms 一周期 / 默认 10.3–18.7 kHz（--hw-f-max 24000 可到 22.7 kHz）/ 255 位 Kasami 码片扩频</span>
 <span class="p">$</span> python replay_audio.py --emit-probe probe.wav --seconds 300
 
 <span class="c"># 60 s ≈ 5.8 MB，300 s ≈ 29 MB；循环播放即可，不要变速</span></div>
@@ -713,7 +713,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <thead><tr><th style="width:118px">项目</th><th style="width:210px">要求</th><th>为什么</th></tr></thead>
       <tbody>
         <tr><td><b>编码</b></td><td class="dim">WAV + PCM 整数（16/24/32-bit）</td><td class="dim">浮点 WAV 与 mp3 / aac / m4a 读不了，先转 16-bit PCM</td></tr>
-        <tr><td><b>采样率</b></td><td class="dim">≥ 48 kHz</td><td class="dim">最高载波 23.5 kHz，Nyquist 需 47 kHz。44.1 kHz 会被明确拒绝</td></tr>
+        <tr><td><b>采样率</b></td><td class="dim">≥ 48 kHz</td><td class="dim">默认 20k 频带最高载波 18.5 kHz、探测带 18.7 kHz，44.1 kHz 实际够用；质检统一要求 48 kHz，且 24k 档会被 Nyquist 拒绝</td></tr>
         <tr><td><b>声道</b></td><td class="dim">单声道优先，双声道自动下混</td><td class="dim">只用 <span class="code-i">|H(f)|</span>，两声道相位差无意义</td></tr>
         <tr><td><b>时长</b></td><td class="dim">≥ 20 s，建议 40 s 以上</td><td class="dim">不需要安静校准期；建议至少 20 s 有效证据（8 s 呼吸窗 + 5 s 证据窗 + 10 s 预算）</td></tr>
         <tr><td><b>电平</b></td><td class="dim">峰值 0.1–0.9 满刻度，<b>不要削顶</b></td><td class="dim">幅度统计对整体增益不变，但要避开量化噪底与削波谐波</td></tr>
@@ -768,10 +768,10 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <thead><tr><th style="width:110px">方面</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td><b>作用</b></td><td>得到背景残差能量 <span class="code-i">δ₀</span> 与子载波相干门限 <span class="code-i">θ_κ</span>，避免每次开机前 2 s 的冷启动估计被关门、人员走动或空调变化污染。同一车厢条件下确认更早，也不受当次开机瞬态影响。</td></tr>
-        <tr><td><b>方法</b></td><td>空车厢、关门关窗，空调/音响按常用档位；停止当前监测；点侧栏「执行空车标定」、调用 <span class="code-i">POST /api/calibration</span>，或运行 <span class="code-i">python3 -m core.calibration --simulate</span>（仿真）/ <span class="code-i">--wav capture.wav</span>（真实录音）。默认 5 s（允许 3–30 s），前 1 s 作 warmup 丢弃，实际用后 4 s 的 40 个决策帧。<span class="code-i">hw_f_max</span> 省略即论文频带。</td></tr>
+        <tr><td><b>方法</b></td><td>空车厢、关门关窗，空调/音响按常用档位；停止当前监测；点侧栏「执行空车标定」、调用 <span class="code-i">POST /api/calibration</span>，或运行 <span class="code-i">python3 -m core.calibration --simulate</span>（仿真）/ <span class="code-i">--wav capture.wav</span>（真实录音）。默认 5 s（允许 3–30 s），前 1 s 作 warmup 丢弃，实际用后 4 s 的 40 个决策帧。<span class="code-i">hw_f_max</span> 省略即默认 20 kHz 频带（10.5–18.5 kHz）。</td></tr>
         <tr><td><b>统计</b></td><td>能量取样本 p35；相干门限取 p25 + 5.5×MAD，并夹在 <span class="code-i">[0.115, 0.22]</span>。灵敏度旋钮仍在运行时按比例缩放运动阈值。</td></tr>
         <tr><td><b>产物与加载</b></td><td>写入 <span class="code-i">data/calibration/empty_cabin.json</span>（已 gitignore）；下次 <span class="code-i">/api/live/start</span> 自动加载。侧栏或 <span class="code-i">GET /api/calibration</span> 可查看数值。</td></tr>
-        <tr><td><b>失效条件</b></td><td>换硬件频响上限（20k/18k/16k/14k）或换车后应重标。载波数不匹配时加载会自动回退到冷启动，不报错；监测运行中调用会返回 409。</td></tr>
+        <tr><td><b>失效条件</b></td><td>换硬件频响上限（24k/20k/18k/16k/14k）或换车后应重标。载波数不匹配时加载会自动回退到冷启动，不报错；监测运行中调用会返回 409。</td></tr>
       </tbody>
     </table>
   </div>
@@ -812,7 +812,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 帧同步  PASS  周期 960 采样 · 匹配质量 27.2（阈值 9）
 周期  PASS  960 采样/周期 · 标称 960
 连续性  PASS  1000 帧 · 补齐 0 · 空洞 0 · 覆盖 100.0%
-频带  PASS  24 载波 @ 10500–23500 Hz · 探头裕量 -0.0 dB
+频带  PASS  24 载波 @ 10500–18500 Hz · 探头裕量 -0.0 dB
 ------------------------------------------------------------------
 结论  PASS  可以进入判定</div>
 
@@ -844,7 +844,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 文件        capture.wav
 采样率      48000 Hz      帧率  50.0 Hz（周期 960 采样）
 时长/帧数   33.96 s / 1699 帧      补齐 0  空洞 0
-载波        24 个 @ 10500–23500 Hz      探头裕量 -2.74 dB
+载波        24 个 @ 10500–18500 Hz      探头裕量 -0.0 dB
 电平        峰值 0.98  RMS 0.35093      削波样本 0
 ------------------------------------------------------------------
 判定        检测到儿童 @ 15.7 s（呼吸证据）
@@ -880,7 +880,7 @@ MRC 有效子载波 19.19 / 24
         <tr><td>播放设备低通 16 kHz</td><td><span class="verdict ok">仍检出 · 18.1 BPM</span></td><td class="dim">MRC 自动压低失效载波权重，24 路里只用 15 路</td></tr>
         <tr><td>播放设备低通 12 kHz</td><td><span class="verdict care">仍检出 · 18.6 BPM</span></td><td class="dim">只剩 10.5–11.5 kHz 少数载波有能量，结果已不可靠，应换宽频扬声器</td></tr>
         <tr><td>探测音慢放 8.8%</td><td><span class="verdict no">拒绝 · 匹配质量 6.4</span></td><td class="dim">周期被拉长，20 ms 栅格对不上；阈值 9，正常录音明显高于 9</td></tr>
-        <tr><td>用 44.1 kHz 录制</td><td><span class="verdict no">拒绝 · 需 47 kHz</span></td><td class="dim">Nyquist 22.05 kHz &lt; 23.5 kHz 载波上限，报错里会写明</td></tr>
+        <tr><td>用 44.1 kHz 录制</td><td><span class="verdict no">拒绝 · 需 45.4 kHz</span></td><td class="dim">24k 档探测带 22.7 kHz，Nyquist 22.05 kHz 不够，报错里会写明</td></tr>
         <tr><td>完全没播探测音</td><td><span class="verdict no">拒绝 · 匹配质量 8.3</span></td><td class="dim">纯噪声的稳健底噪很高，匹配质量低于阈值 9</td></tr>
       </tbody>
     </table>
@@ -904,16 +904,16 @@ MRC 有效子载波 19.19 / 24
 
 <!-- ============ 07 ============ -->
 <section id="band">
-  <div class="sec-head"><span class="num">07</span><h2>扬声器/麦克风到不了 20 kHz</h2></div>
+  <div class="sec-head"><span class="num">07</span><h2>扬声器/麦克风到不了默认的 20 kHz</h2></div>
   <p class="sec-sub">硬件带宽不够时，失效不是「精度差一点」，而是「一半载波变成噪声源」。</p>
 
-  <p>论文的 10.5–23.5 kHz 假设了宽频换能器。车载球顶高音加 MEMS 麦克风常常只到 <b>18 kHz</b>，通话级器件甚至只到 <b>16 kHz</b>。这不是靠调阈值能糊过去的事，因为载波一旦落在硬件滚降上，该频点的探针功率接近零，谱除法就变成 <span class="mono">噪声 / 噪声</span>——估出来的 <span class="mono">|H|</span> 不再有信号成分，只剩一条宽带随机序列。</p>
+  <p>论文实测的 -3 dB 上限约 20 kHz，因此默认频带是 10.5–18.5 kHz；23.5 kHz 只是规划器的设计上限，只有 24k 档（22.5 kHz 带顶）才会靠近它。车载球顶高音加 MEMS 麦克风常常只到 <b>18 kHz</b>，通话级器件甚至只到 <b>16 kHz</b>。这不是靠调阈值能糊过去的事，因为载波一旦落在硬件滚降上，该频点的探针功率接近零，谱除法就变成 <span class="mono">噪声 / 噪声</span>——估出来的 <span class="mono">|H|</span> 不再有信号成分，只剩一条宽带随机序列。</p>
 
   <figure>
   <svg viewBox="0 0 680 316" width="100%" style="max-width:680px;font-family:inherit" role="img" aria-label="三种硬件带宽下的载波布局">
     <rect x="0" y="0" width="680" height="316" fill="#ffffff"/>
-    <text x="24" y="22" font-size="13" font-weight="600" fill="#16181d">无限制（论文假设）</text>
-    <text x="24" y="39" font-size="11" fill="#6b7382">24 载波 · 565 Hz 间隔 · Kasami 探测带 10.3–23.7 kHz</text>
+    <text x="24" y="22" font-size="13" font-weight="600" fill="#16181d">24 kHz 器件（宽频档）</text>
+    <text x="24" y="39" font-size="11" fill="#6b7382">24 载波 · 522 Hz 间隔 · Kasami 探测带 10.3–22.7 kHz</text>
     <rect x="66.1" y="46" width="547.7" height="26" rx="3" fill="#e8f5f3" stroke="#bde0da"/>
     <rect x="630.7" y="46" width="25.3" height="26" rx="3" fill="#f4f5f7" stroke="#e4e7ec"/>
     <line x1="66.1" y1="51" x2="66.1" y2="67" stroke="#0f7b72" stroke-width="2.2" stroke-linecap="round"/>
@@ -1001,8 +1001,8 @@ MRC 有效子载波 19.19 / 24
   <figcaption>载波带顶、载波数、探测带顶三者一起随硬件上限收缩，<b>下限 10.5 kHz 不动</b>。18 kHz 仍能保住 24 路（6 kHz 带宽），16 kHz 只能降到 17 路——宁减载波数也不压间隔。</figcaption>
   </figure>
 
-  <h3 style="font-size:15px;margin:26px 0 10px">实测：硬撑 23.5 kHz 的后果</h3>
-  <p>把现有 24 载波配置直接喂给 18 kHz 硬件（渲染 WAV 经 6 阶低通），空车厢的结果是：</p>
+  <h3 style="font-size:15px;margin:26px 0 10px">实测：把载波铺进滚降区的后果</h3>
+  <p>把 24k 档的 24 载波配置直接喂给 18 kHz 硬件（渲染 WAV 经 6 阶低通），空车厢的结果是：</p>
 
   <div class="tbl-wrap">
     <table>
@@ -1053,22 +1053,22 @@ MRC 有效子载波 19.19 / 24
 
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th style="width:150px">场景</th><th>24 载波（无限制）</th><th>24 载波 @18 kHz</th><th>17 载波 @16 kHz</th></tr></thead>
+      <thead><tr><th style="width:150px">场景</th><th>24 载波 @24 kHz</th><th>24 载波 @18 kHz</th><th>17 载波 @16 kHz</th></tr></thead>
       <tbody>
         <tr><td>空车厢</td><td><span class="verdict ok">不告警</span> 0 帧</td><td><span class="verdict ok">不告警</span> 0 帧</td><td><span class="verdict ok">不告警</span> 0 帧</td></tr>
-        <tr><td>噪声振动</td><td><span class="verdict ok">不告警</span> 23 帧</td><td><span class="verdict ok">不告警</span> 25 帧</td><td><span class="verdict ok">不告警</span> 41 帧</td></tr>
+        <tr><td>噪声振动</td><td><span class="verdict ok">不告警</span> 24 帧</td><td><span class="verdict ok">不告警</span> 25 帧</td><td><span class="verdict ok">不告警</span> 41 帧</td></tr>
         <tr><td>入睡婴儿</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
         <tr><td>活跃儿童</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
         <tr><td>呼吸暂停</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
         <tr><td>新生儿</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
         <tr><td>成人</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
-        <tr><td><b>BPM MAE</b>（活跃 / 新生儿）</td><td class="mono">1.77 / 0.63</td><td class="mono">2.11 / 0.42</td><td class="mono">2.27 / 0.80</td></tr>
-        <tr><td><b>MRC 有效子载波</b></td><td class="mono">21.9</td><td class="mono">21.4</td><td class="mono">15.1</td></tr>
+        <tr><td><b>BPM MAE</b>（活跃 / 新生儿）</td><td class="mono">1.64 / 0.62</td><td class="mono">2.11 / 0.42</td><td class="mono">2.27 / 0.80</td></tr>
+        <tr><td><b>MRC 有效子载波</b></td><td class="mono">21.8</td><td class="mono">20.7</td><td class="mono">14.3</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0 s、空场景零误报、活跃儿童运动证据 10–24 帧。窄带下运动证据反而更多，但证据占比仍未越过 30% 的确认门限。代价是 BPM 精度下降，以及 MRC 有效子载波从 21.9 降到 15.1——这是物理上限，不是实现缺陷。</p>
+  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0 s、空场景零误报、活跃儿童运动证据 10–24 帧。窄带下运动证据反而更多，但证据占比仍未越过 30% 的确认门限。代价是 BPM 精度下降，以及 MRC 有效子载波从 21.8 降到 14.3——这是物理上限，不是实现缺陷。</p>
 
   <h3 style="font-size:15px;margin:26px 0 10px">连带必须改的一处：κ 阈值要随载波数缩放</h3>
   <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。改成 <span class="mono">median + 5.5 × 稳健σ</span> 后：24 路仍是 0.115（行为不变），17 路升到 0.142，噪声峰值 0.124 被挡、真实运动最弱帧 0.185 仍通过。</p>
@@ -1082,11 +1082,11 @@ python replay_audio.py --emit-probe probe18k.wav --seconds <span class="s">300</
 <span class="c"># 在该带宽下跑全场景闭合自检</span>
 python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
 
-  <p>以上是命令行路径。Web UI 侧栏也有「<b>硬件频响上限</b>」一栏，直接选档（论文 / 20k / 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时会写成 <span class="mono">24→23 路（已裁剪）</span>。</p>
+  <p>以上是命令行路径。Web UI 侧栏也有「<b>硬件频响上限</b>」一栏，直接选档（24k / 20k（默认）/ 18k / 16k / 14k），选中即显示该档的频带、载波数与间隔；启动后下方「运行频带」显示实际值，运行时门控裁掉载波时会写成 <span class="mono">24→23 路（已裁剪）</span>。</p>
 
   <div class="note warn">
     <b>先测硬件上限再配置，不要依赖兜底。</b>不传 <span class="mono">hw_f_max</span> 时运行时门控仍能消除误报，
-    但载波是按 23.5 kHz 铺的，前端有效积分带宽被浪费，BPM 精度和运动灵敏度都吃亏。
+    但载波是按默认 20 kHz 铺的，前端有效积分带宽被浪费，BPM 精度和运动灵敏度都吃亏。
     测法：循环播放 Kasami 探测音（或 10–24 kHz 的宽带啁啾），用被测麦克风录回来做频谱，看 −3 dB 点在哪。
   </div>
 </section>
@@ -1124,8 +1124,8 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
       <span class="verdict care">错一个后面全废</span>
       <div class="pchips">
         <span class="pchip">CSI_FS <em>50 Hz</em></span>
-        <span class="pchip">载波 <em>10.5–23.5 kHz</em></span>
-        <span class="pchip">Kasami 探测带 <em>10.3–23.7 kHz</em></span>
+        <span class="pchip">载波 <em>10.5–18.5 kHz</em></span>
+        <span class="pchip">Kasami 探测带 <em>10.3–18.7 kHz</em></span>
         <span class="pchip">码片 <em>78 µs</em></span>
         <span class="pchip">AUDIO_FS <em>48 kHz</em></span>
       </div>

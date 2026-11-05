@@ -61,10 +61,10 @@ STATIC_FILES = {"index.html", "styles.css", "app.js"}
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 MAX_ANALYZE_SECONDS = 3600.0
 
-# UI 可以提供的硬件上限。None 表示论文自身的频带；其余为我们实际遇到的驱动
-# 规格（见 README 的“硬件带宽受限”）。plan_band 会拒绝载波少于四个的上限
-#（低于约 12.75 kHz），因此 API 刻意只暴露这组经过测试的取值。
-BAND_CHOICES = (None, 20_000, 18_000, 16_000, 14_000)
+# UI 可以提供的硬件上限。首项 24 kHz 是最高可用频响上限的实际值；20 kHz
+# 是论文实测上限，也是默认档。plan_band 会拒绝载波少于四个的上限（低于约
+# 12.75 kHz），因此 API 刻意只暴露这组经过测试的取值。
+BAND_CHOICES = (24_000, 20_000, 18_000, 16_000, 14_000)
 
 
 def band_options() -> list[dict]:
@@ -75,7 +75,7 @@ def band_options() -> list[dict]:
         out.append(
             {
                 "hw_f_max": hw,
-                "label": "论文" if hw is None else f"{hw / 1000:.0f}k",
+                "label": f"{hw / 1000:.0f}k",
                 "f_lo_hz": band.f_lo,
                 "f_hi_hz": band.f_hi,
                 "n_carriers": band.n_carriers,
@@ -158,7 +158,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if hw_f_max not in BAND_CHOICES:
                 valid = [int(v) for v in BAND_CHOICES if v is not None]
-                self._send_json({"error": f"hw_f_max must be null or one of {valid}"}, 400)
+                self._send_json(
+                    {"error": f"hw_f_max must be one of {valid}; omit it for the default 20k"},
+                    400,
+                )
                 return
 
         seconds_text = _first(query, "seconds", "")
@@ -279,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                     if hw_f_max not in BAND_CHOICES:
                         valid = [int(v) for v in BAND_CHOICES if v is not None]
                         self._send_json(
-                            {"error": f"hw_f_max must be null or one of {valid}"},
+                            {"error": f"hw_f_max must be one of {valid}; omit it for the default 20k"},
                             400,
                         )
                         return
@@ -320,7 +323,7 @@ class Handler(BaseHTTPRequestHandler):
                     if hw_f_max not in BAND_CHOICES:
                         valid = [int(v) for v in BAND_CHOICES if v is not None]
                         self._send_json(
-                            {"error": f"hw_f_max must be null or one of {valid}"},
+                            {"error": f"hw_f_max must be one of {valid}; omit it for the default 20k"},
                             400,
                         )
                         return

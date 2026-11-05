@@ -1,6 +1,7 @@
 """带宽受限硬件：载波规划、健康门控、安全降级。
 
-论文假设 10.5-23.5 kHz 的频带。真实驱动器常常是 18 kHz，有时只有 16 kHz，
+论文实测的 -3 dB 上限约 20 kHz，默认频带为 10.5-18.5 kHz。真实驱动器常常是
+18 kHz，有时只有 16 kHz，
 而且失效并不温和：滚降之上的载波几乎没有探测功率，于是谱除法返回的是噪声除以
 噪声。那些载波不仅带来误差 —— 它们注入一段宽带随机幅度序列，残差能量把它
 当作运动，MRC 权重把它当作相关性。在空车厢上实测，使用论文频带配 18 kHz
@@ -36,9 +37,12 @@ from core.replay import export_probe, render_wav, run_wav
 # 规划
 # ---------------------------------------------------------------------------
 
-def test_full_band_is_unchanged_when_no_ceiling_is_given():
+def test_default_ceiling_is_20k_when_none_is_given():
+    """论文实测的 -3 dB 上限是 20 kHz，因此 None 必须落到 18.5 kHz 带顶。"""
     band = plan_band(None)
-    assert band.f_hi == F_HIGH
+    assert band.hw_f_max == 20_000
+    assert band.f_hi == 18_500
+    assert band.sweep_hi == 18_700
     assert band.n_carriers == 24
     assert band.f_lo == F_LOW
 
@@ -59,7 +63,7 @@ def test_low_edge_never_moves_with_the_ceiling():
 
 def test_declared_ceiling_is_never_sounded():
     """载波必须比上限低 HW_GUARD_HZ，而不是落在上限上。"""
-    for hw in (20_000, 18_000, 16_000):
+    for hw in (24_000, 20_000, 18_000, 16_000):
         band = plan_band(hw)
         assert band.f_hi <= hw - HW_GUARD_HZ + 1e-9
         assert band.sweep_hi > band.f_hi, "sweep must overhang the carrier band"
@@ -83,7 +87,7 @@ def test_impossible_band_is_rejected_loudly():
 
 def test_carriers_snap_onto_the_probe_grid_for_every_ceiling():
     """不在网格上的载波要插值一个不断振荡的量：10 % 误差。"""
-    for hw in (None, 18_000, 16_000):
+    for hw in (None, 24_000, 18_000, 16_000):
         probe = make_probe(hw_f_max=hw)
         carriers = carrier_bins(probe)
         df = probe.fs / probe.length
@@ -95,7 +99,7 @@ def test_carriers_snap_onto_the_probe_grid_for_every_ceiling():
 
 def test_probe_stops_at_the_hardware_ceiling():
     """在驱动器上限之上发声，会把周期能量浪费在没人听的频率上。"""
-    wide, narrow = make_probe(), make_probe(hw_f_max=16_000)
+    wide, narrow = make_probe(hw_f_max=24_000), make_probe(hw_f_max=16_000)
     spec_w = np.abs(np.fft.fft(wide.samples))
     spec_n = np.abs(np.fft.fft(narrow.samples))
     df = wide.fs / wide.length
@@ -189,9 +193,9 @@ def test_unplanned_band_is_caught_by_runtime_pruning(tmp_path):
     """18 kHz 驱动器背后放全频带探测信号：设计是错的，但前端本身绝不能
     把一个安静的车厢变成告警。"""
     src = tmp_path / "empty.wav"
-    render_wav(src, "empty", duration_s=26.0, snr_db=35.0)
+    render_wav(src, "empty", duration_s=26.0, snr_db=35.0, hw_f_max=24_000)
     limited = _bandlimited(src, tmp_path / "lp18.wav", 18_000)
-    result = run_wav(limited)
+    result = run_wav(limited, hw_f_max=24_000)
     assert result["source"]["carriers_used"] < result["source"]["carriers"]
     assert result["source"]["carriers_pruned"], "pruned carriers should be named"
     assert result["metrics"]["alarm_at"] is None

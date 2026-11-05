@@ -121,7 +121,7 @@ class SimulationEngine:
                 "band": band.describe(),
                 "f_lo_hz": band.f_lo,
                 "f_hi_hz": band.f_hi,
-                "hw_f_max_hz": None if hw_f_max is None else float(hw_f_max),
+                "hw_f_max_hz": round(float(band.hw_f_max), 1),
                 "carriers_planned": int(band.n_carriers),
                 "carrier_spacing_hz": round(band.spacing_hz, 1),
                 "detector_config": cfg.to_dict(),

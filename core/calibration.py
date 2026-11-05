@@ -73,7 +73,7 @@ def _build_profile(
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "duration_s": round(float(duration_s), 2),
         "samples": len(energies),
-        "hw_f_max_hz": None if hw_f_max is None else float(hw_f_max),
+        "hw_f_max_hz": round(float(band.hw_f_max), 1),
         "n_carriers": int(band.n_carriers),
         "band": band.describe(),
         "f_lo_hz": band.f_lo,
@@ -258,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=float, default=0.0,
                         help="从录音第几秒开始统计，默认 0 s；可用来跳过开关门瞬态")
     parser.add_argument("--hw-f-max", type=float, choices=BAND_CHOICES, default=None,
-                        help="硬件频响 -3 dB 上限（Hz）；省略表示论文频带（24 载波）")
+                        help="硬件频响 -3 dB 上限（Hz）；省略表示默认 20 kHz（24 载波）")
     args = parser.parse_args(argv)
 
     try:

@@ -196,7 +196,7 @@ def make_probe(
     带宽收缩时只有实际使用的载波被均衡，不会把能量浪费在驱动器上限之外。
 
     ``hw_f_max`` 是扬声器 + 麦克风实测的 -3 dB 上限。传入它，频带就会收缩以适配；
-    不传则假定采用论文的 23.5 kHz。
+    不传则采用默认的 20 kHz 硬件上限。
     """
     band = plan_band(hw_f_max)
     length = int(round(fs * period_s))

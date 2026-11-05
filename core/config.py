@@ -41,8 +41,9 @@ PROBE_TAPER_S = 0.0006       # chirp 兼容模式的 0.6 ms 边缘
 # 宽带随机幅度序列，残差能量和 MRC 权重都无法把它与运动的人体区分开 ——
 # 在空车厢上实测，它们曾在 17.6 s 触发一次虚假的存在判定。
 #
-# 因此频带必须依据硬件来规划，而不能依据论文：
-HW_F_MAX = None              # 实测的 -3 dB 上限；None = 假定为 F_HIGH
+# 因此频带必须依据硬件来规划，而不能依据论文。论文实测的 -3 dB 上限约为
+# 20 kHz，这也是本样机的默认值：
+HW_F_MAX = 20_000            # Hz，实测的 -3 dB 上限；None 也表示使用该默认值
 HW_GUARD_HZ = 1_500          # 让载波比硬件上限低这么多
 CARRIER_MIN_SPACING_HZ = 250  # 频率分集下限，见 plan_band 的 docstring
 SWEEP_MARGIN_HZ = 200       # Kasami 探测信号的带限在载波频带两侧各外延的量
@@ -101,8 +102,9 @@ def plan_band(hw_f_max: float | None = None) -> AcousticBand:
     用分集阶数换间距是这笔交易中正确的一边，因为 17 个载波仍能对噪声取平均，
     而 24 个载波按 174 Hz 间距会开始共享干涉条纹。
 
-    ``hw_f_max=None`` 表示“没有实测限制”：直接使用设计频带，不设保护带，
-    因为没有滚降需要避让。
+    ``hw_f_max=None`` 表示使用默认的 20 kHz 实测上限；默认频带为
+    10.5–18.5 kHz（24 个载波、约 348 Hz 间距），探测带 10.3–18.7 kHz。
+    只有显式传入更大的上限（例如 24 kHz）才会向 23.5 kHz 的设计上限靠近。
 
     只有频带的**上边界**参与规划；``f_lo`` 始终等于 ``F_LOW``。10 kHz 高通
     拐点与 ``F_LOW`` 之间的 500 Hz 已经覆盖了它，因此降低上限只会从上方收缩
@@ -116,12 +118,8 @@ def plan_band(hw_f_max: float | None = None) -> AcousticBand:
     载波更多，BPM 反而略差，且第一种仍会在静止车厢里误触发运动。真正的限制
     是呼吸信号的相干时间，而不是载波数量，所以保守的保护带保留不变。
     """
-    if hw_f_max:
-        f_hi = min(float(F_HIGH), float(hw_f_max) - HW_GUARD_HZ)
-        ceiling = float(hw_f_max)
-    else:
-        f_hi = float(F_HIGH)
-        ceiling = float(F_HIGH)
+    ceiling = float(HW_F_MAX if hw_f_max is None else hw_f_max)
+    f_hi = min(float(F_HIGH), ceiling - HW_GUARD_HZ)
     if f_hi <= F_LOW + CARRIER_MIN_SPACING_HZ * 3:
         raise ValueError(
             f"hardware ceiling {ceiling/1e3:.1f} kHz leaves only "
