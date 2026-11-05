@@ -181,6 +181,28 @@ def test_quality_check_passes_a_usable_capture(tmp_path):
     assert qc["sync"]["holes"] == 0
 
 
+def test_quality_check_accepts_the_exported_probe(tmp_path):
+    """探测音文件本身是满刻度，但每周期只有孤立峰值，不应被当成削波。"""
+    path = tmp_path / "probe18k.wav"
+    export_probe(path, seconds=20.0, hw_f_max=18000)
+    qc = check_audio(path, hw_f_max=18000)
+    assert qc["passed"], qc
+    level = next(item for item in qc["checks"] if item["name"] == "电平")
+    assert level["status"] == "PASS", level
+
+
+def test_quality_check_flags_real_clipping(tmp_path):
+    """真正的削波会在波峰处留下连续满刻度样本，仍必须判 FAIL。"""
+    x = np.zeros(48000 * 12)
+    x[48000:48200] = 1.0
+    x[49000:49200] = -1.0
+    path = write_wav(tmp_path / "clipped.wav", x)
+    qc = check_audio(path)
+    level = next(item for item in qc["checks"] if item["name"] == "电平")
+    assert level["status"] == "FAIL", level
+    assert not qc["passed"]
+
+
 def test_quality_check_rejects_a_capture_without_probe(tmp_path):
     """没有探测音的录音必须被这道门拦住，而不是进入判定给出一个数值。"""
     path = write_wav(tmp_path / "silence.wav", np.zeros(48000 * 10))

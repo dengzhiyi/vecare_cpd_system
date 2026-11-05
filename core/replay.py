@@ -94,6 +94,23 @@ def export_probe(
 # WAV -> CSI
 # ---------------------------------------------------------------------------
 
+def _clipped_samples(x: np.ndarray, level: float = 0.999, min_run: int = 3) -> int:
+    """统计真正削波的样本数：只有连续 ``min_run`` 个满刻度样本才算。
+
+    归一化到满量程的播放文件，其峰值也会落在 16-bit 的 32767（读回约 0.99997），
+    但通常每个周期只有孤立的一个样本。若按“逐样本 >= 0.999”计数，会把正常的
+    满刻度波形误判成削波；真实削波则会在波峰处留下连续的平坦段。
+    """
+    hot = np.abs(np.asarray(x)) >= level
+    if not hot.any():
+        return 0
+    edges = np.diff(np.concatenate(([0], hot.astype(np.int8), [0])))
+    starts = np.flatnonzero(edges == 1)
+    ends = np.flatnonzero(edges == -1)
+    runs = ends - starts
+    return int(runs[runs >= min_run].sum())
+
+
 def load_csi(
     path: str | Path,
     fs: int | None = None,
@@ -162,7 +179,7 @@ def load_csi(
         # 粗略的电平检查：削波或近乎无声的采集，是录音“毫无反应”最常见的原因
         "peak": round(float(np.max(np.abs(x))), 4),
         "rms": round(float(np.sqrt(np.mean(x**2))), 5),
-        "clipped_samples": int(np.sum(np.abs(x) >= 0.999)),
+        "clipped_samples": _clipped_samples(x),
         # 交给 run_wav，以便按频率指认被裁剪的载波；
         # 在 meta 到达调用方之前会被弹出。
         "_carriers": [round(float(f), 1) for f in carriers],
@@ -219,7 +236,7 @@ def check_audio(
     duration = float(n_frames / native_fs) if native_fs else 0.0
     peak = float(np.max(np.abs(x))) if x.size else 0.0
     rms = float(np.sqrt(np.mean(x**2))) if x.size else 0.0
-    clipped = int(np.sum(np.abs(x) >= 0.999))
+    clipped = _clipped_samples(x)
 
     depth = {1: "8-bit", 2: "16-bit", 3: "24-bit", 4: "32-bit"}.get(width)
     fmt_detail = (f"WAV PCM {depth or '未知位深'} · {native_fs} Hz · "
@@ -244,16 +261,17 @@ def check_audio(
 
     if clipped > 0:
         lvl_status = "FAIL"
-        lvl_detail = f"峰值 {peak:.3f} · 削波 {clipped} 样本"
+        lvl_detail = f"峰值 {peak:.3f} · 连续削波 {clipped} 样本"
     elif peak < 0.02:
         lvl_status = "WARN"
         lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f}（电平过低）"
     elif peak > 0.98:
-        lvl_status = "WARN"
-        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f}（接近满刻度）"
+        # 满刻度不等于削波：归一化波形每个周期的峰值本就会落在量化上限。
+        lvl_status = "PASS"
+        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f} · 满刻度，无连续削波"
     else:
         lvl_status = "PASS"
-        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f} · 削波 0"
+        lvl_detail = f"峰值 {peak:.3f} · RMS {rms:.3f} · 无连续削波"
     checks.append(_check("电平", lvl_status, lvl_detail))
 
     meta = None

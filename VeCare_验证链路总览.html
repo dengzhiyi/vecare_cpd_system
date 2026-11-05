@@ -346,7 +346,7 @@ footer{
 
   <p>也可以用命令行批量核对：</p>
   <div class="code">python3 replay_audio.py --selfcheck   <span class="c"># 仿真 → WAV → 再回放，验证音频前端</span>
-python3 -m pytest tests -q            <span class="c"># 66 项自动测试</span></div>
+python3 -m pytest tests -q            <span class="c"># 70 项自动测试</span></div>
 
   <div class="note"><b>仿真的特点：</b>完全可控、可重复、16× 加速，几分钟就能跑完几个场景；缺点是声音模型理想化，没有真实混响、扬声器失真和复杂人际干扰。</div>
 
@@ -590,9 +590,9 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
   <div class="sec-head"><span class="num">05</span><h2>如何跑仿真测试</h2></div>
   <p class="sec-sub">从轻到重四步：单元测试 → 离线批跑 → 渲染回放 → 实时界面。</p>
 
-  <div class="code"><span class="c"># 1. 单元测试，约 8 s</span>
+  <div class="code"><span class="c"># 1. 单元测试，约 20 s</span>
 <span class="p">$</span> python -m pytest tests -q
-<span class="s">66 passed in 19.62s</span>
+<span class="s">70 passed in 20.45s</span>
 
 <span class="c"># 2. 七场景离线批跑（路径 A），约 30 s</span>
 <span class="p">$</span> python -c "from core.offline import run_offline; import core.scenarios as sc; [print(k, run_offline(k)['metrics']) for k in sc.SCENARIOS]"
@@ -808,7 +808,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 格式  PASS  WAV PCM 16-bit · 48000 Hz · 单声道
 采样率  PASS  48000 Hz
 时长  PASS  20.00 s（建议 ≥20 s）
-电平  PASS  峰值 0.980 · RMS 0.321 · 削波 0
+电平  PASS  峰值 0.980 · RMS 0.321 · 无连续削波
 帧同步  PASS  周期 960 采样 · 匹配质量 27.2（阈值 9）
 周期  PASS  960 采样/周期 · 标称 960
 连续性  PASS  1000 帧 · 补齐 0 · 空洞 0 · 覆盖 100.0%
@@ -823,7 +823,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
         <tr><td><b>格式</b></td><td class="dim">PCM 8/16/24/32-bit WAV</td><td class="dim">—</td><td class="dim">浮点 WAV / mp3 / aac</td></tr>
         <tr><td><b>采样率</b></td><td class="dim">≥ 48 kHz</td><td class="dim">—</td><td class="dim">&lt; 48 kHz（重采样也救不回来）</td></tr>
         <tr><td><b>时长</b></td><td class="dim">≥ 20 s</td><td class="dim">12–20 s</td><td class="dim">&lt; 12 s</td></tr>
-        <tr><td><b>电平</b></td><td class="dim">峰值 0.02–0.98，削波 0</td><td class="dim">过低或接近满刻度</td><td class="dim">有削波样本</td></tr>
+        <tr><td><b>电平</b></td><td class="dim">峰值 ≥ 0.02，无连续削波（满刻度也算 PASS）</td><td class="dim">峰值 &lt; 0.02（电平过低）</td><td class="dim">连续 ≥ 3 个满刻度样本（真削波）</td></tr>
         <tr><td><b>帧同步</b></td><td class="dim">匹配质量 ≥ 12</td><td class="dim">9–12</td><td class="dim">&lt; 9（没有可用 Kasami 探测音）</td></tr>
         <tr><td><b>周期</b></td><td class="dim">标称周期 ±1 采样</td><td class="dim">±2 采样</td><td class="dim">偏差更大（变速/重采样）</td></tr>
         <tr><td><b>连续性</b></td><td class="dim">空洞 0，覆盖 ≥ 98%</td><td class="dim">补齐偏多或覆盖 95–98%</td><td class="dim">有空洞或覆盖 &lt; 95%</td></tr>
@@ -1255,7 +1255,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 66 项<br>
+  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 70 项<br>
   代码位置：vecare_cpd_system（仓库根目录）　·　文档生成于 2026-11-03
 </footer>
 
