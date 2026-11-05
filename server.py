@@ -121,7 +121,13 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             return {}
         raw = self.rfile.read(length)
-        return json.loads(raw.decode("utf-8"))
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            # 二进制音频误投到 JSON 接口时给出明确提示，而不是泄漏 codec 报错。
+            raise ValueError(
+                "请求体不是 JSON；音频请上传到 /api/audio/analyze"
+            ) from exc
 
     def _analyze_upload(self, parsed) -> None:
         """接收原始 WAV 字节并返回音频可视化数据。
@@ -250,7 +256,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         try:
             parsed = urlparse(self.path)
-            path = parsed.path
+            path = parsed.path.rstrip("/") or "/"
             if path == "/api/audio/analyze":
                 self._analyze_upload(parsed)
                 return
@@ -330,6 +336,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found", "path": path}, 404)
         except json.JSONDecodeError:
             self._send_json({"error": "invalid JSON body"}, 400)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             self._send_json({"error": str(exc)}, 500)
