@@ -365,13 +365,18 @@ def run_wav(
     carriers: np.ndarray | None = None,
     cfg: DetectorConfig | None = None,
     hw_f_max: float | None = None,
+    background: dict | None = None,
 ) -> dict:
-    """让一段录制的 WAV 走完整个检测链路。"""
+    """让一段录制的 WAV 走完整个检测链路。
+
+    ``background`` 是空车标定基线；实采若不做标定就只能冷启动自适应，
+    两者得到的 δ₀ 与相干门限不同，必须显式选择而不是隐式回退。
+    """
     amp, times, meta = load_csi(
         path, fs=fs, probe=probe, carriers=carriers, hw_f_max=hw_f_max
     )
     cfg = cfg or DetectorConfig(sensitivity=sensitivity)
-    pipe = SASPipeline(cfg, fs=float(meta["csi_fs"]))
+    pipe = SASPipeline(cfg, fs=float(meta["csi_fs"]), background=background)
 
     frames: list[dict] = []
     for t, a in zip(times, amp):

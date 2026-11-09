@@ -135,8 +135,9 @@ python replay_audio.py --emit-probe probe.wav --seconds 300
 # 2. 判定前先做录音质检
 python replay_audio.py capture.wav --qc
 
-# 3. 质检通过后再回放并判定
+# 3. 质检通过后再回放并判定；有实采空车基线时显式加载（否则冷启动自适应）
 python replay_audio.py capture.wav
+python replay_audio.py capture.wav --calibration
 
 # 4. 存成可回放会话，之后在 Web UI「日志回放」里看
 python replay_audio.py capture.wav --save data/sessions

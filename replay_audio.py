@@ -34,6 +34,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import core.calibration as calib
 import core.scenarios as scenarios
 from core.config import AUDIO_FS
 from core.offline import run_offline
@@ -73,6 +74,9 @@ def print_report(result: dict) -> None:
     clip = src.get("clipped_samples", 0)
     print(f"电平        峰值 {src['peak']}  RMS {src['rms']}"
           f"      削波样本 {clip}" + ("  ← 削波会破坏 CSI" if clip else ""))
+    frames = result.get("frames") or []
+    if frames:
+        print(f"背景        {frames[0]['state'].get('background_source', '—')}")
 
     print("-" * 66)
     source_label = {"motion": "运动", "breathing": "呼吸"}.get(m.get("confirmed_by"), "—")
@@ -231,6 +235,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--save", metavar="DIR", help="存成可回放会话（如 data/sessions）")
     ap.add_argument("--hw-f-max", type=float, default=None, metavar="HZ",
                     help="扬声器+麦克风的 -3 dB 频响上限（如 18000）；不给则按默认 20 kHz")
+    ap.add_argument("--calibration", action="store_true",
+                    help="加载实采空车基线（python3 -m core.calibration --wav 生成）；"
+                         "不给则冷启动自适应")
     args = ap.parse_args(argv)
 
     if args.emit_probe:
@@ -277,8 +284,16 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return 0
 
+    background = None
+    if args.calibration:
+        background = calib.load_empty_calibration(source="wav")
+        if background is None:
+            print("没有可用的实采空车基线。先运行：\n"
+                  "  python3 -m core.calibration --wav <空车录音>",
+                  file=sys.stderr)
+            return 2
     result = run_wav(args.audio, sensitivity=args.sensitivity, fs=args.fs,
-                     hw_f_max=args.hw_f_max)
+                     hw_f_max=args.hw_f_max, background=background)
     if args.json:
         print(json.dumps(
             {k: v for k, v in result.items() if k != "frames"},

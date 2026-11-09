@@ -307,6 +307,24 @@ def test_rendered_wav_reproduces_the_simulator_verdict(tmp_path):
     assert 15.0 <= metrics["bpm_median"] <= 21.0     # 真值为 18 BPM
 
 
+def test_run_wav_uses_an_empty_cabin_background(tmp_path):
+    """实采必须能显式接入空车基线，而不是只能冷启动自适应。"""
+    path = tmp_path / "empty.wav"
+    render_wav(path, "empty", duration_s=8.0, snr_db=45.0)
+    profile = {
+        "profile": "empty_cabin",
+        "source": "wav",
+        "energy_unit": "relative",
+        "baseline_energy": 0.01,
+        "coherence_threshold": 0.2,
+        "coherence_floor": 0.0925,
+    }
+    result = run_wav(path, background=profile)
+    assert result["frames"]
+    assert result["frames"][0]["state"]["background_source"] == "空车标定"
+    assert result["frames"][0]["state"]["calibrated"] is True
+
+
 def test_quiet_rendered_wav_does_not_alarm(tmp_path):
     path = tmp_path / "empty.wav"
     render_wav(path, "empty", duration_s=26.0, snr_db=40.0)
