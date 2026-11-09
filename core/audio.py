@@ -382,6 +382,11 @@ def frame_offsets(
     空隙。小的空隙按实测周期补齐（这同时吸收了播放/麦克风时钟漂移，因为锚点
     始终落在检测到的峰上）；大的空隙则原样保留并上报，因为对幅度序列做时间拉伸
     会破坏呼吸 lag 的估计。
+
+    检测到的峰还必须落在帧栅格上。真实录音会在两个真实帧之间出现伪峰
+    （实测间隔 609/768 采样，约为 0.6–0.8 个周期），这种帧并不对应完整探测
+    周期，参与解调只会让 CSI 时间轴错位；因此偏离栅格超过 ``tol`` 且不足
+    1.5 个周期的峰直接丢弃，并计入 ``dropped``，而不是悄悄当成真实帧。
     """
     mf = matched_filter(x, probe)
     found = frame_starts(x, probe, min_ratio)
@@ -392,43 +397,75 @@ def frame_offsets(
         "nominal_csi_fs": probe.csi_fs,
         "filled": 0,
         "holes": 0,
+        "dropped": 0,
+        "irregular": 0,
         "period_samples": probe.length,
         "csi_fs": probe.csi_fs,
         "coverage": 0.0,
+        "jitter_ms": 0.0,
+        "max_deviation_ms": 0.0,
         "longest_gap_s": 0.0,
     }
     if found.size < 2:
         return found, stats
 
     d = np.diff(found)
-    med = float(np.median(d))
-    near = d[np.abs(d - med) <= 0.12 * med]
-    period = int(round(float(np.median(near)) if near.size else med))
+    # 周期必须围绕探测信号的标称周期估计。若用检测间隔的中位数，伪峰会把
+    # 它拉偏（实测 609/768 混入后半段中位数变成 613），随后真实帧反而被当成
+    # 伪峰。12% 的窗口只允许时钟漂移，不允许差一个周期的误检。
+    tol = 0.12
+    nominal = float(probe.length)
+    near = d[np.abs(d - nominal) <= tol * nominal]
+    period = int(round(float(np.median(near)) if near.size else nominal))
     period = max(1, period)
     stats["period_samples"] = period
     stats["csi_fs"] = probe.fs / period
 
     starts = [int(found[0])]
+    last = int(found[0])
     filled = 0
     holes = 0
-    for a, b in zip(found[:-1], found[1:]):
-        gap = int(b - a)
+    dropped = 0
+    irregular = 0
+    for b in found[1:]:
+        b = int(b)
+        gap = b - last
         n = int(round(gap / period))
-        if 2 <= n <= max_fill:
+        err = abs(gap - n * period) / period if n else 1.0
+        if n <= 0:
+            continue
+        if err > tol:
+            irregular += 1
+            stats["max_deviation_ms"] = max(
+                stats["max_deviation_ms"],
+                round(abs(gap - n * period) / probe.fs * 1000.0, 2),
+            )
+            if gap < 1.5 * period:
+                # 栅格之间的伪峰：不对应完整探测周期，丢弃。
+                dropped += 1
+                continue
+            # 长间隙且偏离栅格，无法安全插值；保留端点并按空洞上报。
+            holes += 1
+            stats["longest_gap_s"] = max(stats["longest_gap_s"], gap / probe.fs)
+        elif 2 <= n <= max_fill:
             for k in range(1, n):
-                starts.append(int(round(a + k * period)))
+                starts.append(int(round(last + k * period)))
             filled += n - 1
         elif n > max_fill:
             holes += 1
             stats["longest_gap_s"] = max(stats["longest_gap_s"], gap / probe.fs)
-        starts.append(int(b))
+        starts.append(b)
+        last = b
 
     starts = np.unique(np.asarray(starts, dtype=int))
     stats["filled"] = filled
     stats["holes"] = holes
-    stats["coverage"] = float(
-        min(1.0, starts.size / max(1.0, len(x) / period))
-    )
+    stats["dropped"] = dropped
+    stats["irregular"] = irregular
+    stats["jitter_ms"] = round(float(np.std(near - np.median(near)) / probe.fs * 1000.0), 3) \
+        if near.size else 0.0
+    span = max(1.0, (float(found[-1]) - float(found[0])) / period + 1.0)
+    stats["coverage"] = float(min(1.0, starts.size / span))
     return starts, stats
 
 

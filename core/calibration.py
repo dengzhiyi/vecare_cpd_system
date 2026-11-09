@@ -11,11 +11,13 @@
 
 标定只影响运动支路的判据：
     * 残差能量基线（相对能量的分母）；
-    * 运动相干性阈值（由空车相干性中位数 + 5.5×MAD 得到）。
+    * 运动相干性阈值：``max(MP 噪声底, 空车相干分布 p25 + 5.5×MAD)``。
+      噪声底按实际载波数与相干窗长推导，不再设硬封顶。
 呼吸支路依赖 8 s ACF，不使用这份基线。
 
 产物路径：``data/calibration/empty_cabin.json``（不入库）。基线按载波数区分，
-频带变化时不会误用旧基线。
+频带变化时不会误用旧基线；能量单位由 ``energy_unit`` 标记，绝对量纲的旧基线
+（缺少该字段）会被拒绝，需重新标定。
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ import numpy as np
 
 from .channel import AcousticChannel
 from .config import CSI_FS, DetectorConfig, plan_band
+from .dsp import coherence_noise_floor
 from .pipeline import SASPipeline
 from .scenarios import get_scenario
 
@@ -53,6 +56,7 @@ def _build_profile(
     cfg: DetectorConfig,
     duration_s: float,
     hw_f_max: float | None,
+    coh_samples: int,
     extra: dict | None = None,
 ) -> dict:
     """把空车观测段的原始统计量写成基线文件。"""
@@ -63,9 +67,11 @@ def _build_profile(
     med_e, _ = _robust_threshold(energies, 0.0, 1e-9)
     # 能量基线取中位数附近的低分位，避免把偶发噪声尖峰写进分母。
     baseline_energy = max(float(np.percentile(energies, 35)), 1e-9)
-    med_c, coherence_threshold = _robust_threshold(
-        coherences, 5.5, cfg.motion_coherence_min
-    )
+    # 相干门限的下限来自 iid 噪声的 Marchenko–Pastur 上界，随载波数 S 与
+    # 相干窗长 N 变化；上限由空车分布决定。此前两者都被 0.22 硬封顶，
+    # 真实录音标定值 0.643 因此被压到 0.22，门控完全失去信息。
+    floor = coherence_noise_floor(coh_samples, band.n_carriers)
+    med_c, coherence_threshold = _robust_threshold(coherences, 5.5, floor)
     coh_spread = float(np.median(np.abs(np.asarray(coherences) - med_c))) * 1.4826
 
     profile = {
@@ -78,11 +84,14 @@ def _build_profile(
         "band": band.describe(),
         "f_lo_hz": band.f_lo,
         "f_hi_hz": band.f_hi,
+        "energy_unit": "relative",
         "baseline_energy": baseline_energy,
         "energy_median": med_e,
         "coherence_median": med_c,
         "coherence_spread": coh_spread,
-        "coherence_threshold": min(0.22, coherence_threshold),
+        "coherence_samples": int(coh_samples),
+        "coherence_floor": round(float(floor), 4),
+        "coherence_threshold": round(float(coherence_threshold), 4),
         "motion_threshold": cfg.motion_ratio_floor(),
     }
     if extra:
@@ -133,6 +142,7 @@ def calibrate_empty_cabin(
         cfg=cfg,
         duration_s=duration_s,
         hw_f_max=hw_f_max,
+        coh_samples=int(round(cfg.motion_coherence_window_s * CSI_FS)),
         extra={
             "source": "simulation",
             "source_file": None,
@@ -194,6 +204,7 @@ def calibrate_empty_cabin_from_wav(
         cfg=cfg,
         duration_s=max(0.0, effective_end - effective_start),
         hw_f_max=hw_f_max,
+        coh_samples=int(round(cfg.motion_coherence_window_s * float(meta["csi_fs"]))),
         extra={
             "source": "wav",
             "source_file": Path(wav_path).name,
@@ -223,6 +234,9 @@ def load_empty_calibration(
     except (OSError, ValueError):
         return None
     if n_carriers is not None and int(profile.get("n_carriers", 0)) != int(n_carriers):
+        return None
+    # 旧基线的能量是绝对幅度，现已改为逐载波相对量；混用会让 ratio 失真。
+    if profile.get("energy_unit") != "relative":
         return None
     profile_source = profile.get("source", "simulation")
     if source is not None and profile_source != source:

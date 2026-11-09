@@ -1,19 +1,38 @@
 """SAS 信号处理核心的单元测试。"""
 import numpy as np
+import pytest
 
 from core.config import DetectorConfig
 from core.dsp import (
     autocorr,
+    coherence_noise_floor,
     combine_acf,
     compute_features,
     find_breathing_peak,
     interference_pattern,
-    interference_pattern_long,
     motion_statistic,
+    residual_energy,
     subcarrier_coherence,
 )
 
 FS = 50
+
+
+def test_residual_energy_is_scale_invariant():
+    """载波归一化后，整体增益不能改变运动统计量。"""
+    rng = np.random.default_rng(11)
+    X = 1.0 + 0.02 * rng.standard_normal((100, 24))
+    base = residual_energy(X)
+    for k in (0.25, 0.5, 2.0, 10.0):
+        assert residual_energy(X * k) == pytest.approx(base, rel=1e-12)
+
+
+def test_coherence_floor_follows_the_actual_carrier_count():
+    """相干噪声底必须随 S 变化；24 路约 0.0925，12 路约 0.151。"""
+    assert coherence_noise_floor(100, 24) == pytest.approx(0.0925, abs=2e-4)
+    assert coherence_noise_floor(100, 17) > 0.11
+    assert coherence_noise_floor(100, 12) == pytest.approx(0.151, abs=2e-3)
+    assert coherence_noise_floor(100, 12) > coherence_noise_floor(100, 24)
 
 
 def _breathing_acf(bpm, window_s=8.0, fs=FS):
@@ -114,32 +133,6 @@ def test_decaying_baseline_without_a_peak_is_rejected():
     peak = find_breathing_peak(np.exp(-t / 2.0), FS, cfg, 8 * FS)
     assert not peak["valid"]
     assert peak["bpm"] is None
-
-
-def test_long_interference_needs_an_absolute_negative_lobe():
-    """长时判据不能只看“比 lag 0 掉了多少”。
-
-    δ 型 ACF（安静车厢）在 lag 0 为 1、其余为 0，任何噪声小凹都会满足
-    “掉了 0.9”，过去因此把空车标成长时干扰。真正的 4 s 突发抬高整窗均值，
-    在数秒 lag 上留下绝对为负的平台。
-    """
-    t = np.arange(int(8 * FS)) / FS
-    rng = np.random.default_rng(3)
-
-    quiet = np.zeros_like(t)
-    quiet[0] = 1.0
-    quiet[1:] = 0.004 * rng.standard_normal(t.size - 1)
-    assert not interference_pattern_long(quiet, FS)
-
-    burst = np.exp(-t / 0.15) - 0.18 * np.exp(-((t - 4.0) ** 2) / (2 * 1.2 ** 2))
-    assert interference_pattern_long(burst, FS)
-
-
-def test_periodic_breathing_is_not_long_interference():
-    """18 BPM 的 ACF 谷底很深，但它会在 2*tau 处回到呼吸量级的正峰。"""
-    for bpm in (12.0, 18.0, 30.0):
-        acf = _breathing_acf(bpm)
-        assert not interference_pattern_long(acf, FS), f"{bpm} BPM misread as interference"
 
 
 def test_breathing_rate_not_halved_above_45_bpm():

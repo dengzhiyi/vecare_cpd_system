@@ -7,6 +7,7 @@
 import numpy as np
 import pytest
 
+from core import audio
 from core.audio import (
     _MLS_TAPS,
     _kasami_codes,
@@ -167,6 +168,28 @@ def test_frame_sync_fills_a_dropped_period():
     assert starts.size >= reps - 2
     # 首尾两个峰受周期环绕影响会偏移几个采样，内部网格必须严格等间距。
     assert np.all(np.diff(starts)[1:-1] == probe.length)
+
+
+def test_frame_sync_drops_off_lattice_peaks(monkeypatch):
+    """真实录音里的 609/1307 采样间隔不能当成 1 个周期。
+
+    伪峰只对应部分探测周期，参与解调会让时间轴错位；应被丢弃并把漏掉的
+    真实帧按栅格补齐。
+    """
+    probe = make_probe()
+    period = probe.length
+    stream = np.tile(probe.samples, 10)
+    # 复现用户实测：两个非栅格伪峰夹在真实帧之间。
+    found = np.array([0, 609, 1307, 2 * period, 3 * period])
+    monkeypatch.setattr(audio, "frame_starts", lambda *a, **k: found)
+
+    starts, stats = frame_offsets(stream, probe)
+    assert stats["dropped"] == 2
+    assert stats["irregular"] == 2
+    assert stats["filled"] >= 1
+    assert stats["max_deviation_ms"] > 5.0
+    # 剩下的帧必须落在真实周期上，不能把 1.36 个周期当成 1 个周期。
+    assert np.all(np.diff(starts) == period)
 
 
 def test_frame_sync_reports_a_long_hole_instead_of_stretching():

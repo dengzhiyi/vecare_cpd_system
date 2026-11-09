@@ -15,15 +15,7 @@ import numpy as np
 from scipy.fft import next_fast_len, rfft, irfft
 from scipy.signal import find_peaks
 
-from .config import (
-    DetectorConfig,
-    INTERFERENCE_DEPTH,
-    LONG_INTERFERENCE_DEPTH,
-    LONG_INTERFERENCE_LAG_S,
-    LONG_INTERFERENCE_MIN_LAG_S,
-    LONG_INTERFERENCE_RECOVERY,
-    MRC_WEIGHT_FLOOR,
-)
+from .config import DetectorConfig, INTERFERENCE_DEPTH, MRC_WEIGHT_FLOOR
 
 
 def _detrend(X: np.ndarray) -> np.ndarray:
@@ -72,15 +64,41 @@ def motion_statistic(acf_motion: np.ndarray, lag_samples: int) -> np.ndarray:
 # motion 通道
 # ---------------------------------------------------------------------------
 def residual_energy(X: np.ndarray) -> float:
-    """短 CSI 窗去趋势后的动态能量。
+    """短 CSI 窗去趋势后的*相对*动态能量。
 
     在 1 s 内，呼吸引起的起伏几乎是一条直线，因此去趋势会去掉其中大部分；
     而肢体运动（在窗内形成一个鼓包）会留下较大的残差。
+
+    每条载波先除以自身的平均幅度再聚合，否则 30 dB 的载波间路径损耗会让最强
+    载波独占判决权重（实测真实录音跨度 31.8 dB，强弱比 39×）。除以自身电平后
+    整体增益会被自动约掉：输入乘任意正常数，输出不变。
     """
     R = _detrend(X)
     if R.size == 0:
         return 0.0
-    return float(np.mean(R.std(axis=0)))
+    level = np.abs(X).mean(axis=0)
+    # 远低于中位电平的载波已接近硬件噪底，其相对抖动没有信息量；剔除以避免
+    # 除以接近零的电平把整帧能量抬高。1% 约对应 40 dB 的滚降，远宽于实测跨度。
+    alive = level >= 0.01 * float(np.median(level))
+    if not np.any(alive):
+        return 0.0
+    return float(np.mean(R[:, alive].std(axis=0) / level[alive]))
+
+
+def coherence_noise_floor(n_samples: int, n_channels: int) -> float:
+    """iid 噪声下 rank-1 方差占比的 Marchenko–Pastur 上界。
+
+    对 N×S 的独立噪声矩阵，最大特征值占迹的比例约为 ``(1+√(S/N))²/S``。
+    这条公式给出相干门限的**下限**：载波被裁剪后 S 变小，噪声底会显著抬高
+    （N=100 时：24 路约 0.092，17 路约 0.117，12 路约 0.151，8 路约 0.206），
+    所以门限不能写成常数。真实残差在时间上相关，空车实测通常高于该值，
+    因此实际门限还要叠加标定分布。
+    """
+    n = max(int(n_samples), 1)
+    s = max(int(n_channels), 1)
+    if s < 2:
+        return 0.0
+    return float(min(1.0, (1.0 + np.sqrt(s / n)) ** 2 / s))
 
 
 def subcarrier_coherence(X: np.ndarray) -> float:
@@ -124,35 +142,6 @@ def interference_pattern(acf_mean: np.ndarray, depth: float = INTERFERENCE_DEPTH
     return float(min(seg[0], seg[-1]) - seg[k]) > depth
 
 
-def interference_pattern_long(acf: np.ndarray, fs: int) -> bool:
-    """§5 的长时版本：0.5–6 s 内出现绝对为负的宽平台，且区间内没有呼吸正峰。
-
-    短 V 检测只看前 0.5 s，4 s 的噪声突发在 1 s 运动窗里根本看不到谷底。
-    这里改用 8 s 呼吸 ACF：持续噪声抬高了整窗均值，使窗外样本整体变为负值，
-    于是 ACF 在数秒的 lag 上留下一个 *绝对* 为负的平台；真实呼吸一定会在 tau
-    处回升到接近 1 的正峰。
-
-    判据用绝对高度而不是“从 1 掉了多少”：安静车厢的 ACF 与 δ 函数无异，
-    任何噪声小凹都满足“下降 0.9”，过去因此把空车误标成长时干扰。现在要求
-    谷底自身低于 ``-LONG_INTERFERENCE_DEPTH``，并且 0.5–6 s 内再没有呼吸量级
-    的正峰（``LONG_INTERFERENCE_RECOVERY``；18 BPM 的首峰约为 0.5–0.8，
-    4 s 噪声的残余起伏不超过 0.25）。
-
-    该标志仍需由检测器用能量比值门控，以免把缓慢的真实体动误判成干扰。
-    """
-    n = min(len(acf), int(round(LONG_INTERFERENCE_LAG_S * fs)) + 1)
-    start = int(round(LONG_INTERFERENCE_MIN_LAG_S * fs))
-    if n <= start + 2:
-        return False
-    seg = np.asarray(acf[:n], dtype=np.float64)
-    k = int(np.argmin(seg[start:n])) + start
-    if float(seg[k]) > -LONG_INTERFERENCE_DEPTH:
-        return False
-    # 呼吸的正峰可能出现在谷底之前（例如 18 BPM 的首峰在 3.3 s，而更深的下凹
-    # 在 5 s），因此要看整个 0.5–6 s，而不只是谷底之后的尾巴。
-    return float(np.max(seg[start:])) < LONG_INTERFERENCE_RECOVERY
-
-
 def motion_features(
     X: np.ndarray,
     fs: int,
@@ -174,6 +163,7 @@ def motion_features(
     return {
         "energy": residual_energy(X),
         "coherence": subcarrier_coherence(coh_win),
+        "coherence_floor": coherence_noise_floor(coh_win.shape[0], coh_win.shape[1]),
         "gains": gains,
         "g_mean": float(np.mean(gains)),
         "interference": interference_pattern(acf_mean),
@@ -370,8 +360,8 @@ def compute_features(
             "gains": motion["gains"].astype(float).tolist(),
             "energy": motion["energy"],
             "coherence": motion["coherence"],
+            "coherence_floor": motion["coherence_floor"],
             "interference": motion["interference"],
-            "interference_long": False,
             "peak": dict(_INVALID_PEAK),
             "acf_display": [],
             "acf_step_s": 0.04,
@@ -389,7 +379,6 @@ def compute_features(
     combined = combine_acf(acf_b, weights)
 
     peak = find_breathing_peak(combined, fs, cfg, amp_breath.shape[0])
-    interference_long = interference_pattern_long(combined, fs)
 
     step = max(1, int(round(0.04 * fs)))
     acf_display = combined[::step].astype(float).tolist()
@@ -398,8 +387,8 @@ def compute_features(
         "gains": weights.astype(float).tolist(),
         "energy": motion["energy"],
         "coherence": motion["coherence"],
+        "coherence_floor": motion["coherence_floor"],
         "interference": motion["interference"],
-        "interference_long": interference_long,
         "peak": peak,
         "acf_display": acf_display,
         "acf_step_s": step / fs,

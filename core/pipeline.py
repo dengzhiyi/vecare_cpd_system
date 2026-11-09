@@ -48,6 +48,7 @@ class SASPipeline:
         self.frame_count = 0
         self.seq = 0
         self.decision_every = max(1, int(round(self.fs / DECISION_FS)))
+        self.last_t: float | None = None
 
         # --- 运行时载波裁剪 ---------------------------------------------
         self.auto_prune = auto_prune
@@ -76,6 +77,14 @@ class SASPipeline:
         amp = np.asarray(amp, dtype=np.float64)
         if self.n_carriers is None:
             self.n_carriers = int(amp.size)
+        # 真实录音可能存在漏帧或伪帧。时间轴一旦出现缺口，就不能让缺口两侧的
+        # 样本继续在同一个 8 s ACF 窗里按等间隔参与计算；清空滑动窗并重新预热，
+        # 比把 1.36 个周期当成 1 个周期更接近物理事实。
+        if self.last_t is not None and t - self.last_t > 1.5 / self.fs:
+            self.hist.clear()
+            self._calib = []
+            self.frame_count = 0
+        self.last_t = float(t)
         self.hist.append(amp)
         self.frame_count += 1
         self._maybe_prune(amp)
@@ -111,8 +120,8 @@ class SASPipeline:
                 "motion": snap["motion_ratio"],
                 "motion_energy": round(float(features["energy"]), 4),
                 "motion_coherence": round(float(features["coherence"]), 3),
+                "coherence_floor": round(float(features["coherence_floor"]), 4),
                 "interference": bool(features["interference"]),
-                "interference_long": bool(features.get("interference_long", False)),
                 "gains": [round(float(g), 4) for g in gains],
                 "bpm_raw": None if peak.get("bpm") is None else round(float(peak["bpm"]), 1),
                 "confidence": round(float(peak.get("confidence", 0.0)), 3),

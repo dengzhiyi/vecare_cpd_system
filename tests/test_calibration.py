@@ -1,6 +1,8 @@
 """空车标定与冷启动背景估计的回归测试。"""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from core import calibration
@@ -69,7 +71,8 @@ def test_empty_calibration_roundtrip(tmp_path, monkeypatch):
     assert profile["samples"] >= 20
     assert profile["n_carriers"] > 0
     assert profile["baseline_energy"] > 0
-    assert profile["coherence_threshold"] >= 0.115
+    assert profile["energy_unit"] == "relative"
+    assert profile["coherence_threshold"] >= profile["coherence_floor"] > 0
     assert profile_path.exists()
 
     loaded = calibration.load_empty_calibration(profile["n_carriers"])
@@ -108,6 +111,19 @@ def test_detector_loads_empty_calibration():
     assert abs(det.coherence_threshold - 0.142) < 1e-9
 
 
+def test_legacy_absolute_energy_baseline_is_rejected(tmp_path, monkeypatch):
+    """旧基线存的是绝对幅度；改成相对能量后必须强制重新标定。"""
+    path = tmp_path / "empty_cabin.json"
+    path.write_text(json.dumps({
+        "profile": "empty_cabin",
+        "n_carriers": plan_band().n_carriers,
+        "baseline_energy": 0.014,
+        "coherence_threshold": 0.22,
+    }), encoding="utf-8")
+    monkeypatch.setattr(calibration, "PROFILE_PATH", path)
+    assert calibration.load_empty_calibration(plan_band().n_carriers) is None
+
+
 def test_empty_calibration_from_wav(tmp_path, monkeypatch):
     """实采适配层：空车 WAV -> CSI -> 同一套基线统计。"""
     wav = tmp_path / "empty.wav"
@@ -124,7 +140,8 @@ def test_empty_calibration_from_wav(tmp_path, monkeypatch):
     assert profile["samples"] >= 20
     assert profile["n_carriers"] == plan_band().n_carriers
     assert profile["baseline_energy"] > 0
-    assert profile["coherence_threshold"] >= 0.115
+    assert profile["energy_unit"] == "relative"
+    assert profile["coherence_threshold"] >= profile["coherence_floor"] > 0
     assert profile_path.exists()
 
     loaded = calibration.load_empty_calibration(profile["n_carriers"])

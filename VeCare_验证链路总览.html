@@ -204,7 +204,7 @@ footer{
     它和实录音频最终都会变成同一个 24×50 Hz 的 CSI 振幅矩阵，之后的每一行代码完全相同。
   </p>
   <div class="chips">
-    <span class="chip"><b>81</b> 项测试通过</span>
+    <span class="chip"><b>83</b> 项测试通过</span>
     <span class="chip"><b>7</b> 个验证场景</span>
     <span class="chip">响应 <b>10.0</b> s</span>
     <span class="chip">CSI <b>24 × 50 Hz</b></span>
@@ -346,7 +346,7 @@ footer{
 
   <p>也可以用命令行批量核对：</p>
   <div class="code">python3 replay_audio.py --selfcheck   <span class="c"># 仿真 → WAV → 再回放，验证音频前端</span>
-python3 -m pytest tests -q            <span class="c"># 81 项自动测试</span></div>
+python3 -m pytest tests -q            <span class="c"># 83 项自动测试</span></div>
 
   <div class="note"><b>仿真的特点：</b>完全可控、可重复、16× 加速，几分钟就能跑完几个场景；缺点是声音模型理想化，没有真实混响、扬声器失真和复杂人际干扰。</div>
 
@@ -769,7 +769,7 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       <tbody>
         <tr><td><b>作用</b></td><td>得到背景残差能量 <span class="code-i">δ₀</span> 与子载波相干门限 <span class="code-i">θ_κ</span>，避免每次开机前 2 s 的冷启动估计被关门、人员走动或空调变化污染。同一车厢条件下确认更早，也不受当次开机瞬态影响。</td></tr>
         <tr><td><b>方法</b></td><td>空车厢、关门关窗，空调/音响按常用档位；停止当前监测；点侧栏「执行空车标定」、调用 <span class="code-i">POST /api/calibration</span>，或运行 <span class="code-i">python3 -m core.calibration --simulate</span>（仿真）/ <span class="code-i">--wav capture.wav</span>（真实录音）。默认 5 s（允许 3–30 s），前 1 s 作 warmup 丢弃，实际用后 4 s 的 40 个决策帧。<span class="code-i">hw_f_max</span> 省略即默认 20 kHz 频带（10.5–18.5 kHz）。</td></tr>
-        <tr><td><b>统计</b></td><td>能量取样本 p35；相干门限取 p25 + 5.5×MAD，并夹在 <span class="code-i">[0.115, 0.22]</span>。灵敏度旋钮仍在运行时按比例缩放运动阈值。</td></tr>
+        <tr><td><b>统计</b></td><td>能量取样本 p35（逐载波相对量，与整体增益无关）；相干门限取 <span class="code-i">max(MP 噪声底, p25 + 5.5×MAD)</span>，其中 MP 噪声底由相干窗长度与实际载波数推导，不设固定上限。灵敏度旋钮仍在运行时按比例缩放运动阈值。</td></tr>
         <tr><td><b>产物与加载</b></td><td>写入 <span class="code-i">data/calibration/empty_cabin.json</span>（已 gitignore）；下次 <span class="code-i">/api/live/start</span> 自动加载。侧栏或 <span class="code-i">GET /api/calibration</span> 可查看数值。</td></tr>
         <tr><td><b>失效条件</b></td><td>换硬件频响上限（24k/20k/18k/16k/14k）或换车后应重标。载波数不匹配时加载会自动回退到冷启动，不报错；监测运行中调用会返回 409。</td></tr>
       </tbody>
@@ -1071,7 +1071,7 @@ MRC 有效子载波 19.19 / 24
   <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0 s、空场景零误报、活跃儿童运动证据 10–24 帧。窄带下运动证据反而更多，但证据占比仍未越过 30% 的确认门限。代价是 BPM 精度下降，以及 MRC 有效子载波从 21.8 降到 14.3——这是物理上限，不是实现缺陷。</p>
 
   <h3 style="font-size:15px;margin:26px 0 10px">连带必须改的一处：κ 阈值要随载波数缩放</h3>
-  <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。改成 <span class="mono">median + 5.5 × 稳健σ</span> 后：24 路仍是 0.115（行为不变），17 路升到 0.142，噪声峰值 0.124 被挡、真实运动最弱帧 0.185 仍通过。</p>
+  <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。现在阈值取 <span class="mono">max(MP(N,S) 噪声底, p25 + 5.5 × 稳健MAD)</span>：N = 100 时 24 路噪声底 0.092、17 路 0.117、12 路 0.151、8 路 0.206，门限随载波减少自动抬高；不再有 0.22 的硬封顶（旧实现会把实测 0.643 压到 0.22）。</p>
 
   <div class="code"><span class="c"># 已录的音频，按 18 kHz 硬件重新规划频带</span>
 python replay_audio.py capture.wav --hw-f-max <span class="s">18000</span>
@@ -1143,7 +1143,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
       <span class="verdict neu">需要反复试</span>
       <div class="pchips">
         <span class="pchip">MOTION_ENERGY_RATIO <em>1.60</em></span>
-        <span class="pchip">MOTION_COHERENCE_MIN <em>0.115</em></span>
+        <span class="pchip">MOTION_RATIO_MAX <em>50</em>（高能兜底）</span>
         <span class="pchip">MOTION_WINDOW_S <em>1.0</em></span>
         <span class="pchip">MOTION_LAG_S <em>0.02</em></span>
         <span class="pchip">BREATH_MIN_PROMINENCE <em>0.05</em></span>
@@ -1186,7 +1186,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
       <div class="pchips">
         <span class="pchip">空车标定：δ₀ = p35，阈值为空车相干分布</span>
         <span class="pchip">冷启动：2 s 自适应，能量 p10 / 相干 p25</span>
-        <span class="pchip">κ_thr = min(0.22, max(0.115, p25 + 5.5·MAD))</span>
+        <span class="pchip">κ_thr = max(MP(N,S) 噪声底, p25 + 5.5·MAD)</span>
         <span class="pchip">呼吸峰稳定性 &lt; 10%</span>
       </div>
       <p>背景基线来自空车标定文件，或开机前 2 s 的冷启动估计，都是运行时从数据里估出来的，硬改等于绕过自适应逻辑。要调灵敏度请用 <span class="code-i">sensitivity</span>（0.3–2.5，唯一对外暴露的旋钮），它只按比例缩放能量比阈值。</p>
@@ -1255,7 +1255,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 81 项<br>
+  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 83 项<br>
   代码位置：vecare_cpd_system（仓库根目录）　·　文档生成于 2026-11-03
 </footer>
 

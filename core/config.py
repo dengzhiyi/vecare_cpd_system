@@ -143,8 +143,10 @@ MOTION_WINDOW_S = 1.0        # 论文 §4.3：短窗以保证响应速度
 MOTION_LAG_S = 1.0 / CSI_FS  # Eq. (4)：g(f) = rho(f, tau = 1/Fs) = 20 ms
 MOTION_COHERENCE_WINDOW_S = 2.0  # 更长的窗可稳定相干性的估计
 MOTION_ENERGY_RATIO = 1.60   # 残差能量 / 校准得到的背景电平
-MOTION_COHERENCE_MIN = 0.115  # 跨子载波的第一奇异值占比
 MOTION_RATIO_FLOOR = 1.25    # 灵敏度 = 1.0 时施加的下限
+# 物理上不可行的相对残差：真实肢体运动的实测上限约 3.79（两份录音），
+# 4 s 强噪声突发可达 60+。这不是检测阈值，只是拒绝明显非物理帧的安全兜底。
+MOTION_RATIO_MAX = 50.0
 
 # --- breathing 通道 ---------------------------------------------------------
 BREATH_WINDOW_S = 8.0
@@ -173,11 +175,6 @@ CARRIER_HEALTH_S = 5.0
 EVIDENCE_GAP_RESET_S = 5.0   # 未确认存在时，新的一段证据会重新开始计算预算
 MRC_WEIGHT_FLOOR = 0.02      # 防止零/负增益让某个子载波失效
 INTERFERENCE_DEPTH = 0.35    # 用于抑制脉冲噪声的 V 形 ACF 深度
-LONG_INTERFERENCE_LAG_S = 6.0       # 长时瞬态检查覆盖 0.5–6 s
-LONG_INTERFERENCE_MIN_LAG_S = 0.5
-LONG_INTERFERENCE_DEPTH = 0.10      # 绝对谷底深度；δ 型 ACF 的噪声下凹不超过 0.05
-LONG_INTERFERENCE_RECOVERY = 0.30   # 0.5–6 s 内没有回到这个正峰，就不像周期呼吸
-INTERFERENCE_RATIO_MAX = 50.0       # 只有能量远超正常运动的持续事件才按长时干扰处置
 
 
 @dataclass
@@ -186,7 +183,7 @@ class DetectorConfig:
     motion_lag_s: float = MOTION_LAG_S
     motion_coherence_window_s: float = MOTION_COHERENCE_WINDOW_S
     motion_energy_ratio: float = MOTION_ENERGY_RATIO
-    motion_coherence_min: float = MOTION_COHERENCE_MIN
+    motion_ratio_max: float = MOTION_RATIO_MAX
     breath_window_s: float = BREATH_WINDOW_S
     breath_lag_min_s: float = BREATH_LAG_MIN_S
     breath_lag_max_s: float = BREATH_LAG_MAX_S
@@ -197,7 +194,6 @@ class DetectorConfig:
     breath_min_contrast: float = BREATH_MIN_CONTRAST
     breath_harmonic_min_ratio: float = BREATH_HARMONIC_MIN_RATIO
     breath_harmonic_tolerance: float = BREATH_HARMONIC_TOLERANCE
-    interference_ratio_max: float = INTERFERENCE_RATIO_MAX
     evidence_window_s: float = EVIDENCE_WINDOW_S
     presence_ratio: float = PRESENCE_RATIO
     response_budget_s: float = RESPONSE_BUDGET_S

@@ -308,16 +308,21 @@ def check_audio(
 
         frames = int(meta["frames"])
         filled, holes = int(sync["filled"]), int(sync["holes"])
+        dropped = int(sync.get("dropped", 0))
         coverage = float(sync["coverage"])
-        if holes > 0 or coverage < 0.95 or filled > max(10, 0.02 * frames):
+        if (holes > 0 or coverage < 0.95
+                or dropped > max(10, 0.02 * frames)
+                or filled > max(10, 0.02 * frames)):
             cont = "FAIL"
-        elif filled > max(2, 0.005 * frames) or coverage < 0.98:
+        elif (dropped > max(2, 0.005 * frames) or coverage < 0.98
+              or filled > max(2, 0.005 * frames)):
             cont = "WARN"
         else:
             cont = "PASS"
         checks.append(_check(
             "连续性", cont,
-            f"{frames} 帧 · 补齐 {filled} · 空洞 {holes} · 覆盖 {coverage*100:.1f}%",
+            f"{frames} 帧 · 补齐 {filled} · 丢弃伪峰 {dropped} · 空洞 {holes} "
+            f"· 覆盖 {coverage*100:.1f}% · 栅格偏差 {sync.get('max_deviation_ms', 0):.1f} ms",
         ))
 
         margin = float(meta["probe_db_min"])

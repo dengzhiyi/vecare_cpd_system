@@ -39,7 +39,8 @@ class CPDDetector:
         self._bg_coherence: deque = deque(maxlen=20)
         self.baseline_energy: float | None = None
         self.motion_threshold = cfg.motion_ratio_floor()
-        self.coherence_threshold = cfg.motion_coherence_min
+        self.coherence_threshold = 0.0
+        self.coherence_floor = 0.0
         self.coherence_spread = 0.0
         if background:
             self.install_background(0.0, background)
@@ -48,7 +49,7 @@ class CPDDetector:
         self.motion_coherence = 0.0
         self.motion_detected = False
         self.interference = False
-        self.interference_long = False
+        self.implausible_energy = False
 
         self.evidence = deque()          # (时间, 布尔值)
         self.presence = False
@@ -94,23 +95,23 @@ class CPDDetector:
     def install_background(self, t: float, profile: dict) -> None:
         """加载空车标定基线，冻结自适应估计。"""
         self.baseline_energy = max(float(profile["baseline_energy"]), 1e-9)
-        self.coherence_threshold = float(profile.get(
-            "coherence_threshold", self.cfg.motion_coherence_min
-        ))
+        self.coherence_threshold = float(profile.get("coherence_threshold", 0.0))
+        self.coherence_floor = float(profile.get("coherence_floor", 0.0))
         self.coherence_spread = float(profile.get("coherence_spread", 0.0))
         self.background_source = "空车标定"
         self.calibrated = True
         if t > 0:
             self._event(t, "calibration", "已加载空车标定基线")
 
-    def _update_background(self, t: float, energy: float, coherence: float) -> None:
+    def _update_background(self, t: float, energy: float, coherence: float,
+                           coherence_floor: float) -> None:
         """冷启动背景估计：无空车基线时用开机短窗的低分位残差。
 
         只使用约 2 s 的样本：它刚好看得见一个运动窗内的安静间隙，又不足以把
         儿童持续的呼吸起伏吸收进背景。估计完成后即冻结；若座舱环境发生长期
         变化，应重新执行空车标定，而不是在线慢慢“学”成背景。
         """
-        if self.interference or self.interference_long or self.presence or self.calibrated:
+        if self.interference or self.presence or self.calibrated:
             return
         self._bg_energy.append(float(energy))
         self._bg_coherence.append(float(coherence))
@@ -123,8 +124,12 @@ class CPDDetector:
         # 相干性同样取低分位，避免把运动期的高相干值写进背景门限。
         coh = float(np.percentile(coh_vals, 25))
         coh_mad = float(np.median(np.abs(coh_vals - coh))) * 1.4826
-        self.coherence_threshold = min(
-            0.22, max(self.cfg.motion_coherence_min, coh + 5.5 * coh_mad)
+        # 噪声底由 iid 噪声的 Marchenko–Pastur 上界给出，并随实际载波数变化；
+        # 不再夹在 0.22 以内 —— 真实空车的相干残差可达 0.64，硬封顶会让门控
+        # 完全失去区分力。
+        self.coherence_floor = float(coherence_floor)
+        self.coherence_threshold = max(
+            self.coherence_floor, coh + 5.5 * coh_mad
         )
         self.coherence_spread = coh_mad
         if len(self._bg_energy) >= 20:
@@ -152,25 +157,32 @@ class CPDDetector:
     def update(self, t: float, motion: dict, breath: dict) -> dict:
         energy = float(motion.get("energy", 0.0))
         coherence = float(motion.get("coherence", 0.0))
+        coherence_floor = float(motion.get("coherence_floor", 0.0))
         self.motion_coherence = coherence
+        self.coherence_floor = max(self.coherence_floor, coherence_floor)
         self.interference = bool(motion.get("interference", False))
-        self.interference_long = bool(motion.get("interference_long", False))
 
         if self.background_source == "冷启动自适应":
-            self._update_background(t, energy, coherence)
+            self._update_background(t, energy, coherence, coherence_floor)
 
         base = self.baseline_energy or max(energy, 1e-9)
         ratio = energy / base
         self.motion_ratio = ratio
-        # 长时突发本身也可能是真实体动；只有能量远超正常运动时才按干扰处置。
-        long_now = bool(
-            self.interference_long and ratio > self.cfg.interference_ratio_max
-        )
-        interference_now = bool(self.interference or long_now)
+        # 强噪声突发会让相对残差远超真实体动的物理上限。这不是长时 ACF 判据
+        # （那条在真实语料上从未越过门控，且会把新生儿呼吸误标），而是一道
+        # 独立的安全兜底：这类帧既不产生运动证据，也不进入呼吸判决。
+        self.implausible_energy = bool(ratio > self.cfg.motion_ratio_max)
+        interference_now = bool(self.interference or self.implausible_energy)
+        # 门限本身来自空车分布的低分位。若只要求“达到门限”，噪声尾巴和
+        # 真实运动会在边界上互相重叠（4 s 突发恰好能贴着门限停留 1.5 s）。
+        # 再抬高一个实测散布（MAD），使证据必须明显高于背景分布；散布是
+        # 标定/冷启动观测到的量，不是新写死的常数。
+        coherence_gate = max(self.coherence_floor, self.coherence_threshold) \
+            + self.coherence_spread
         motion_det = bool(
             not interference_now
             and ratio > self.motion_threshold
-            and coherence >= self.coherence_threshold
+            and coherence > coherence_gate
         )
 
         # 只有在身体静止时才去寻找呼吸（论文 §4.3）—— 但有一个例外。
@@ -363,11 +375,12 @@ class CPDDetector:
             else min(1.0, len(self._bg_energy) / 20.0),
             "motion_threshold": round(self.motion_threshold, 4),
             "coherence_threshold": round(self.coherence_threshold, 3),
+            "coherence_floor": round(self.coherence_floor, 4),
             "motion_ratio": round(float(self.motion_ratio), 3),
             "motion_detected": bool(self.motion_detected),
             "motion_coherence": round(float(self.motion_coherence), 3),
             "interference": bool(self.interference),
-            "interference_long": bool(self.interference_long),
+            "implausible_energy": bool(self.implausible_energy),
             "presence": self.presence,
             "presence_score": round(self.presence_score, 3),
             "presence_since": self.presence_since,
