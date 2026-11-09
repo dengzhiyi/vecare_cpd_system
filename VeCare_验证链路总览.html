@@ -204,9 +204,9 @@ footer{
     它和实录音频最终都会变成同一个 24×50 Hz 的 CSI 振幅矩阵，之后的每一行代码完全相同。
   </p>
   <div class="chips">
-    <span class="chip"><b>83</b> 项测试通过</span>
+    <span class="chip"><b>88</b> 项测试通过</span>
     <span class="chip"><b>7</b> 个验证场景</span>
-    <span class="chip">响应 <b>10.0</b> s</span>
+    <span class="chip">响应 <b>10.08</b> s</span>
     <span class="chip">CSI <b>24 × 50 Hz</b></span>
     <span class="chip">决策 <b>10 Hz</b></span>
   </div>
@@ -346,7 +346,7 @@ footer{
 
   <p>也可以用命令行批量核对：</p>
   <div class="code">python3 replay_audio.py --selfcheck   <span class="c"># 仿真 → WAV → 再回放，验证音频前端</span>
-python3 -m pytest tests -q            <span class="c"># 83 项自动测试</span></div>
+python3 -m pytest tests -q            <span class="c"># 88 项自动测试</span></div>
 
   <div class="note"><b>仿真的特点：</b>完全可控、可重复、16× 加速，几分钟就能跑完几个场景；缺点是声音模型理想化，没有真实混响、扬声器失真和复杂人际干扰。</div>
 
@@ -616,27 +616,27 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
       </thead>
       <tbody>
         <tr><td><b>empty</b></td><td class="dim">空车厢 · 仅底噪</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td>
-            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">15.79</td></tr>
-        <tr><td><b>sleeping</b></td><td class="dim">入睡婴儿 · 18 BPM</td><td class="n">8.98</td><td class="n">17.58</td><td class="n">10.0</td><td class="n">0.29</td>
-            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">21.17</td></tr>
-        <tr><td><b>active</b></td><td class="dim">清醒婴儿 · 24 BPM + 肢体动作</td><td class="n">8.98</td><td class="n">17.58</td><td class="n">10.0</td><td class="n">1.77</td>
-            <td><div class="bc"><span class="track"><i style="width:16%"></i></span><span class="bv">11</span></div></td><td class="n">22.71</td></tr>
-        <tr><td><b>apnea</b></td><td class="dim">呼吸暂停 · 42 s 起停呼吸</td><td class="n">8.98</td><td class="n">17.58</td><td class="n">10.0</td><td class="n">0.23</td>
-            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">18.97</td></tr>
-        <tr><td><b>newborn</b></td><td class="dim">新生儿 · 30 BPM 弱反射</td><td class="n">8.98</td><td class="n">17.58</td><td class="n">10.0</td><td class="n">0.63</td>
-            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">19.67</td></tr>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">15.15</td></tr>
+        <tr><td><b>sleeping</b></td><td class="dim">入睡婴儿 · 18 BPM</td><td class="n">8.98</td><td class="n">10.08</td><td class="n">10.08</td><td class="n">0.29</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">21.45</td></tr>
+        <tr><td><b>active</b></td><td class="dim">清醒婴儿 · 24 BPM + 肢体动作</td><td class="n">8.98</td><td class="n">10.08</td><td class="n">10.08</td><td class="n">1.30</td>
+            <td><div class="bc"><span class="track"><i style="width:16%"></i></span><span class="bv">13</span></div></td><td class="n">22.09</td></tr>
+        <tr><td><b>apnea</b></td><td class="dim">呼吸暂停 · 42 s 起停呼吸</td><td class="n">8.98</td><td class="n">10.08</td><td class="n">10.08</td><td class="n">0.26</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">18.76</td></tr>
+        <tr><td><b>newborn</b></td><td class="dim">新生儿 · 30 BPM 弱反射</td><td class="n">8.98</td><td class="n">10.08</td><td class="n">10.08</td><td class="n">0.51</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">17.70</td></tr>
         <tr><td><b>stress</b></td><td class="dim">噪声振动 · 突发噪声 + 座椅振动</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td><td class="nil">—</td>
-            <td><div class="bc"><span class="track"><i style="width:34%"></i></span><span class="bv">23</span></div></td><td class="n">14.96</td></tr>
-        <tr><td><b>adult</b></td><td class="dim">成人 · 14 BPM</td><td class="n">8.98</td><td class="n">17.58</td><td class="n">10.0</td><td class="n">0.20</td>
-            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">21.48</td></tr>
+            <td><div class="bc"><span class="track"><i style="width:34%"></i></span><span class="bv">14</span></div></td><td class="n">14.54</td></tr>
+        <tr><td><b>adult</b></td><td class="dim">成人 · 14 BPM</td><td class="n">8.98</td><td class="n">10.08</td><td class="n">10.08</td><td class="n">0.24</td>
+            <td><div class="bc"><span class="track"><i class="zero" style="width:0"></i></span><span class="bv">0</span></div></td><td class="n">22.16</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="stats">
-    <div class="stat"><b>10.0 s</b><span>响应预算自首条证据起算。若出现 16–18，说明被改回了「确认后再等 10 s」的旧口径</span></div>
-    <div class="stat"><b>0 次误报</b><span>empty 与 stress 的 alarm_at 必须为 None。stress 有 23 帧运动证据是正常的，只是没累积到 30% 门限</span></div>
-    <div class="stat"><b>11 帧</b><span>active 的运动证据（16 kHz 收窄频带下为 24 帧）。若这里是 0 或 1，说明运动通道退化成了纯呼吸兜底</span></div>
+    <div class="stat"><b>10.08 s</b><span>响应预算自开始监测（t=0）起算。若出现 16–18，说明被改回了「确认后再等 10 s」的旧口径</span></div>
+    <div class="stat"><b>0 次误报</b><span>empty 与 stress 的 alarm_at 必须为 None。stress 有 14 帧运动证据是正常的，只是没累积到 30% 门限</span></div>
+    <div class="stat"><b>13 帧</b><span>active 的运动证据（16 kHz 收窄频带下为 24 帧）。若这里是 0 或 1，说明运动通道退化成了纯呼吸兜底</span></div>
   </div>
   <p class="sec-sub" style="margin-top:14px">这是三条硬判据。任何一次改动后先看这三个数，再看别的一一它们最能反映链路是否还健康。</p>
 </section>
@@ -810,9 +810,9 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
 时长  PASS  20.00 s（建议 ≥20 s）
 电平  PASS  峰值 0.980 · RMS 0.321 · 无连续削波
 帧同步  PASS  周期 960 采样 · 匹配质量 27.2（阈值 9）
-周期  PASS  960 采样/周期 · 标称 960
-连续性  PASS  1000 帧 · 补齐 0 · 空洞 0 · 覆盖 100.0%
-频带  PASS  24 载波 @ 10500–18500 Hz · 探头裕量 -0.0 dB
+周期  PASS  960 采样/周期 · 标称 960 · 间隔 σ 0.00 采样 · 严格占比 100.0%
+连续性  PASS  1000 帧 · 补齐 0 · 丢弃伪峰 0 · 空洞 0 · 覆盖 100.0% · 栅格偏差 0.0 ms
+频带  PASS  24 载波 @ 10500–18500 Hz · 实测跨度 -1.2 dB · 探头裕量 -0.0 dB
 ------------------------------------------------------------------
 结论  PASS  可以进入判定</div>
 
@@ -825,37 +825,58 @@ python3 replay_audio.py capture.wav --save data/sessions</div>
         <tr><td><b>时长</b></td><td class="dim">≥ 20 s</td><td class="dim">12–20 s</td><td class="dim">&lt; 12 s</td></tr>
         <tr><td><b>电平</b></td><td class="dim">峰值 ≥ 0.02，无连续削波（满刻度也算 PASS）</td><td class="dim">峰值 &lt; 0.02（电平过低）</td><td class="dim">连续 ≥ 3 个满刻度样本（真削波）</td></tr>
         <tr><td><b>帧同步</b></td><td class="dim">匹配质量 ≥ 12</td><td class="dim">9–12</td><td class="dim">&lt; 9（没有可用 Kasami 探测音）</td></tr>
-        <tr><td><b>周期</b></td><td class="dim">标称周期 ±1 采样</td><td class="dim">±2 采样</td><td class="dim">偏差更大（变速/重采样）</td></tr>
+        <tr><td><b>周期</b></td><td class="dim">标称周期 ±2 采样且严格占比 ≥ 99%</td><td class="dim">严格占比 95–99%</td><td class="dim">偏差 &gt; 2 采样，或严格占比 &lt; 95%</td></tr>
         <tr><td><b>连续性</b></td><td class="dim">空洞 0，覆盖 ≥ 98%</td><td class="dim">补齐偏多或覆盖 95–98%</td><td class="dim">有空洞或覆盖 &lt; 95%</td></tr>
-        <tr><td><b>频带</b></td><td class="dim">探头裕量 ≥ −10 dB</td><td class="dim">−20–−10 dB</td><td class="dim">&lt; −20 dB（高频载波已死）</td></tr>
+        <tr><td><b>频带</b></td><td class="dim">实测载波跨度 ≥ −10 dB</td><td class="dim">&lt; −10 dB（仅警告，不阻断）</td><td class="dim">永不 FAIL</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="note">
-    <b>退出码可直接串进脚本：</b><span class="code-i">PASS</span> / <span class="code-i">WARN</span> 为 0，<span class="code-i">FAIL</span> 为 1；<span class="code-i">--qc --json</span> 输出机器可读结果。质检必须与探测音导出、空车标定、回放判定使用<b>同一个 <span class="code-i">--hw-f-max</span></b>，否则频带结论对不上。
+    <b>退出码可直接串进脚本：</b><span class="code-i">PASS</span> / <span class="code-i">WARN</span> 为 0，<span class="code-i">FAIL</span> 为 1；<span class="code-i">--qc --json</span> 输出机器可读结果。质检必须与探测音导出、空车标定、回放判定使用<b>同一个 <span class="code-i">--hw-f-max</span></b>，否则频带结论对不上；档位清单只在 <span class="code-i">core/config.py</span> 的 <span class="code-i">BAND_CHOICES</span> 维护一份，Web/API、命令行与标定共用。同步失败时程序会用其它档位重试并提示应加的 <span class="code-i">--hw-f-max</span>。
+  </div>
+
+  <div class="note">
+    <b>周期一项检的是间隔分布，不是中位数。</b>中位数取整后恒等于 960，永远会通过；真机播放与采集时钟不同源时，实测严格 960 的占比只有 47–86%、σ 1.2–4.9 采样。频带一项只警告不拦截：载波功率差同时包含硬件滚降与多径零点，单次录音无法区分，而仿真车厢的合法基线也会出现 −38 dB 的多径零点。真正的硬门是帧栅格——多径不会改变探测音的周期。
   </div>
 
   <h3>④ 跑判定</h3>
 
-  <div class="code"><span class="p">$</span> python replay_audio.py capture.wav
+  <div class="code"><span class="p">$</span> python replay_audio.py sleeping.wav
 
 ==================================================================
-文件        capture.wav
+文件        sleeping.wav
 采样率      48000 Hz      帧率  50.0 Hz（周期 960 采样）
-时长/帧数   33.96 s / 1699 帧      补齐 0  空洞 0
+时长/帧数   64.98 s / 3250 帧      补齐 0  空洞 0
 载波        24 个 @ 10500–18500 Hz      探头裕量 -0.0 dB
-电平        峰值 0.98  RMS 0.35093      削波样本 0
+电平        峰值 0.98  RMS 0.34096      削波样本 0
+背景        冷启动自适应
 ------------------------------------------------------------------
-判定        检测到儿童 @ 15.7 s（呼吸证据）
-告警        @ 24.2 s   原因 PRESENCE
-响应时间    10.0 s（自首条证据起算）
-呼吸率      18.5 BPM（18.1–19.4，n=198）
-运动证据    0 帧 / 330      干扰抑制 0 帧      最大能量比 1.68
-MRC 有效子载波 19.19 / 24
+判定        检测到儿童 @ 9.1 s（呼吸证据）
+告警        @ 10.1 s   原因 PRESENCE
+响应时间    10.1 s（自开始监测起算）
+呼吸率      18.1 BPM（17.5–18.5，n=575）
+运动证据    0 帧 / 641      干扰抑制 0 帧      最大能量比 1.12
+MRC 有效子载波 22.03 / 24
 ==================================================================</div>
 
-  <p class="sec-sub" style="margin:-4px 0 22px">上面这段是真实输出（场景渲染成 WAV 后回灌，非手写示意）。看三个数就够：<b>帧率是否 50.0</b>（栅格对齐）、<b>补齐/空洞是否为 0</b>（没丢周期）、<b>响应时间是否 10 s 左右</b>（预算生效）。</p>
+  <p class="sec-sub" style="margin:-4px 0 22px">上面这段是真实输出（场景渲染成 WAV 后回灌，非手写示意）。看三个数就够：<b>帧率是否 50.0</b>（栅格对齐）、<b>补齐/空洞是否为 0</b>（没丢周期）、<b>响应时间是否 10 s 左右</b>（预算从 t=0 起算生效）。</p>
+
+  <h3>④' 平台可测性预检（一批实采到手后先做这一步）</h3>
+
+  <div class="code"><span class="p">$</span> python3 tools/check_platform.py --empty empty_*.wav --people people_*.wav --hw-f-max 18000
+
+== 单段录音 ==
+  empty-1.wav   QC=FAIL 严格栅格= 79.1% σ=1.17 跨度= -16.9dB 共模=0.98 告警=13.39
+== 平台指标 ==
+  帧级可分性 AUC：motion=0.85, coherence=0.14
+  呼吸存在率：空车 28.9% · 有人 12.4%
+== 门禁 ==
+  [FAIL] 帧栅格（严格 960 占比 ≥99%）
+  [FAIL] 帧级可分性（AUC ≥0.9）
+  [FAIL] 有人呼吸存在率（≥50%）</div>
+
+  <p>这不是产品指标，而是入场券：帧栅格不稳、载波跨度不足或帧级特征分不开时，先修硬件与摆位；此时算出的 TPR 与误报率没有统计意义，不能写进验收报告。退出码 1 表示不可用。</p>
 
   <h3>⑤ 存成会话（可选，但推荐）</h3>
 
@@ -1056,19 +1077,19 @@ MRC 有效子载波 19.19 / 24
       <thead><tr><th style="width:150px">场景</th><th>24 载波 @24 kHz</th><th>24 载波 @18 kHz</th><th>17 载波 @16 kHz</th></tr></thead>
       <tbody>
         <tr><td>空车厢</td><td><span class="verdict ok">不告警</span> 0 帧</td><td><span class="verdict ok">不告警</span> 0 帧</td><td><span class="verdict ok">不告警</span> 0 帧</td></tr>
-        <tr><td>噪声振动</td><td><span class="verdict ok">不告警</span> 24 帧</td><td><span class="verdict ok">不告警</span> 25 帧</td><td><span class="verdict ok">不告警</span> 41 帧</td></tr>
-        <tr><td>入睡婴儿</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
-        <tr><td>活跃儿童</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
-        <tr><td>呼吸暂停</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
-        <tr><td>新生儿</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
-        <tr><td>成人</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td><td class="mono">17.58 / 10.0</td></tr>
-        <tr><td><b>BPM MAE</b>（活跃 / 新生儿）</td><td class="mono">1.64 / 0.62</td><td class="mono">2.11 / 0.42</td><td class="mono">2.27 / 0.80</td></tr>
-        <tr><td><b>MRC 有效子载波</b></td><td class="mono">21.8</td><td class="mono">20.7</td><td class="mono">14.3</td></tr>
+        <tr><td>噪声振动</td><td><span class="verdict ok">不告警</span> 14 帧</td><td><span class="verdict ok">不告警</span> 27 帧</td><td><span class="verdict ok">不告警</span> 27 帧</td></tr>
+        <tr><td>入睡婴儿</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td></tr>
+        <tr><td>活跃儿童</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td></tr>
+        <tr><td>呼吸暂停</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td></tr>
+        <tr><td>新生儿</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td></tr>
+        <tr><td>成人</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td><td class="mono">10.08 / 10.08</td></tr>
+        <tr><td><b>BPM MAE</b>（活跃 / 新生儿）</td><td class="mono">1.30 / 0.51</td><td class="mono">1.25 / 0.42</td><td class="mono">1.54 / 0.80</td></tr>
+        <tr><td><b>MRC 有效子载波</b>（均值）</td><td class="mono">20.4</td><td class="mono">20.3</td><td class="mono">14.3</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.0 s、空场景零误报、活跃儿童运动证据 10–24 帧。窄带下运动证据反而更多，但证据占比仍未越过 30% 的确认门限。代价是 BPM 精度下降，以及 MRC 有效子载波从 21.8 降到 14.3——这是物理上限，不是实现缺陷。</p>
+  <p><b>三条硬判据在三种带宽下全部满足</b>：响应 10.08 s（预算自 t=0 起算）、空场景零误报、活跃儿童运动证据 9–13 帧。窄带下运动证据反而更多，但证据占比仍未越过 30% 的确认门限。代价是 BPM 精度下降，以及 MRC 有效子载波从 20.4 降到 14.3——这是物理上限，不是实现缺陷。</p>
 
   <h3 style="font-size:15px;margin:26px 0 10px">连带必须改的一处：κ 阈值要随载波数缩放</h3>
   <p>秩一能量占比 κ 在 N 路上有接近 <span class="mono">1/N</span> 的零假设。载波从 24 降到 17 时，静窗中位数从 0.087 升到 0.113，原先固定的 <span class="mono">+0.015</span> 偏移让阈值落到 0.128，而持续噪声的峰值是 0.129——<b>一声关门就能被确认成儿童</b>。现在阈值取 <span class="mono">max(MP(N,S) 噪声底, p25 + 5.5 × 稳健MAD)</span>：N = 100 时 24 路噪声底 0.092、17 路 0.117、12 路 0.151、8 路 0.206，门限随载波减少自动抬高；不再有 0.22 的硬封顶（旧实现会把实测 0.643 压到 0.22）。</p>
@@ -1255,7 +1276,7 @@ python replay_audio.py --selfcheck --hw-f-max <span class="s">18000</span></div>
 </section>
 
 <footer>
-  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 83 项<br>
+  数据来源：run_offline() 七场景（冷启动、未加载空车标定；含 18/16 kHz 三档带宽） · replay_audio.py --selfcheck · tools/check_platform.py 实采预检 · 实采边界实测（电平 / 带宽 / 播放速率） · pytest 88 项<br>
   代码位置：vecare_cpd_system（仓库根目录）　·　文档生成于 2026-11-03
 </footer>
 

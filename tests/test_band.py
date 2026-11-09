@@ -215,7 +215,9 @@ def test_four_second_noise_burst_is_not_a_breathing_child(tmp_path):
     x[start:stop] += rng.standard_normal(stop - start) * float(np.max(np.abs(x))) * 0.9
     write_wav(path, x, fs=fs)
 
-    result = run_wav(path)
+    # 突发本身会削波，质检会拒绝它；这里要验证的是检测器在噪声突发下的
+    # 判决，而不是质检门，因此显式绕过。
+    result = run_wav(path, require_qc=False)
     metrics = result["metrics"]
     assert not metrics["detected"], f"burst became presence at {metrics['presence_at']} s"
     assert metrics["alarm_at"] is None

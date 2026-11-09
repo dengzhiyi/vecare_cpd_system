@@ -263,6 +263,49 @@ def test_quality_check_accepts_the_exported_probe(tmp_path):
     assert level["status"] == "PASS", level
 
 
+def test_quality_check_rejects_a_jittered_frame_clock(tmp_path):
+    """中位数取整会把 962 采样/帧的录音伪装成 960。
+
+    真机的播放与采集时钟不同源，帧间隔在 959/960/961 之间跳；只看中位数
+    的周期项永远 PASS。质检必须看间隔分布，并把它当作硬门。
+    """
+    base = tmp_path / "base.wav"
+    render_wav(base, "empty", duration_s=22.0, snr_db=45.0)
+    x, fs = read_wav(base)
+    n = int(round(x.size * 1.002))          # 整体拉伸 0.2 %
+    y = np.interp(np.arange(n) * x.size / n, np.arange(x.size), x)
+    path = tmp_path / "jitter.wav"
+    write_wav(path, y, fs=fs)
+
+    qc = check_audio(path)
+    assert not qc["passed"]
+    period = next(c for c in qc["checks"] if c["name"] == "周期")
+    assert period["status"] == "FAIL"
+    assert qc["sync"]["strict_ratio"] < 0.95
+    assert qc["sync"]["period_samples"] == 962
+
+
+def test_run_wav_refuses_an_untrusted_capture(tmp_path):
+    """质检 FAIL 时不得继续输出存在/呼吸结论。"""
+    base = tmp_path / "base.wav"
+    render_wav(base, "empty", duration_s=22.0, snr_db=45.0)
+    x, fs = read_wav(base)
+    n = int(round(x.size * 1.002))
+    path = tmp_path / "jitter.wav"
+    write_wav(path, np.interp(np.arange(n) * x.size / n, np.arange(x.size), x), fs=fs)
+
+    with pytest.raises(RuntimeError, match="输入不可信"):
+        run_wav(path)
+
+
+def test_band_mismatch_hint_names_the_right_band(tmp_path):
+    """档位用错时，报错应指向正确的 --hw-f-max，而不是“没有探测音”。"""
+    path = tmp_path / "k14.wav"
+    render_wav(path, "empty", duration_s=22.0, snr_db=45.0, hw_f_max=14000)
+    with pytest.raises(RuntimeError, match=r"14 kHz.*--hw-f-max 14000"):
+        load_csi(path, hw_f_max=24000)
+
+
 def test_quality_check_flags_real_clipping(tmp_path):
     """真正的削波会在波峰处留下连续满刻度样本，仍必须判 FAIL。"""
     x = np.zeros(48000 * 12)
@@ -319,7 +362,8 @@ def test_run_wav_uses_an_empty_cabin_background(tmp_path):
         "coherence_threshold": 0.2,
         "coherence_floor": 0.0925,
     }
-    result = run_wav(path, background=profile)
+    # 这段只有 8 s，时长项会 FAIL；本用例只验证基线透传，不验证质检。
+    result = run_wav(path, background=profile, require_qc=False)
     assert result["frames"]
     assert result["frames"][0]["state"]["background_source"] == "空车标定"
     assert result["frames"][0]["state"]["calibrated"] is True

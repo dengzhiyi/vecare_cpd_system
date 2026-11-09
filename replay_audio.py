@@ -88,7 +88,7 @@ def print_report(result: dict) -> None:
         print("告警        未触发")
     else:
         print(f"告警        @ {_fmt(m['alarm_at'])} s   原因 {m.get('alarm_reason')}")
-        print(f"响应时间    {_fmt(m.get('response_time_s'))} s（自首条证据起算）")
+        print(f"响应时间    {_fmt(m.get('response_time_s'))} s（自开始监测起算）")
     if m.get("bpm_median") is not None:
         lo, hi = m["bpm_range"]
         print(f"呼吸率      {_fmt(m['bpm_median'], 1)} BPM"
@@ -286,14 +286,20 @@ def main(argv: list[str] | None = None) -> int:
 
     background = None
     if args.calibration:
-        background = calib.load_empty_calibration(source="wav")
+        band = plan_band(args.hw_f_max)
+        background = calib.load_empty_calibration(band.n_carriers, source="wav")
         if background is None:
-            print("没有可用的实采空车基线。先运行：\n"
-                  "  python3 -m core.calibration --wav <空车录音>",
+            print(f"没有与 {band.n_carriers} 载波频带匹配的实采空车基线。先运行：\n"
+                  "  python3 -m core.calibration --wav <空车录音> --hw-f-max "
+                  f"{int(band.hw_f_max)}",
                   file=sys.stderr)
             return 2
-    result = run_wav(args.audio, sensitivity=args.sensitivity, fs=args.fs,
-                     hw_f_max=args.hw_f_max, background=background)
+    try:
+        result = run_wav(args.audio, sensitivity=args.sensitivity, fs=args.fs,
+                         hw_f_max=args.hw_f_max, background=background)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(
             {k: v for k, v in result.items() if k != "frames"},

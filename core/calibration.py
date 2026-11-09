@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 from .channel import AcousticChannel
-from .config import CSI_FS, DetectorConfig, plan_band
+from .config import BAND_CHOICES, CSI_FS, DetectorConfig, plan_band
 from .dsp import coherence_noise_floor
 from .pipeline import SASPipeline
 from .scenarios import get_scenario
@@ -37,8 +37,7 @@ from .scenarios import get_scenario
 CALIBRATION_DIR = Path(__file__).resolve().parent.parent / "data" / "calibration"
 PROFILE_PATH = CALIBRATION_DIR / "empty_cabin.json"
 
-# 与 Web/API 保持一致的硬件频响上限档位（Hz）。
-BAND_CHOICES = (20000.0, 18000.0, 16000.0, 14000.0)
+
 
 
 def _robust_threshold(values: list[float], factor: float, floor: float) -> tuple[float, float]:

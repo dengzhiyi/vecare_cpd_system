@@ -30,10 +30,10 @@ def test_single_early_frame_cannot_confirm_presence():
     assert snap["presence"] is False
 
 
-def test_evidence_gap_does_not_extend_budget_after_presence():
-    """确认存在后预算锚点冻结，短暂断档不能让 10 s 响应预算被推迟。"""
+def test_response_budget_is_anchored_at_monitoring_start():
+    """10 s 预算从开始监测（t=0）起算，证据断档不能把它往后推。"""
     cfg = DetectorConfig(
-        response_budget_s=4.0, evidence_gap_reset_s=0.5, clear_timeout_s=20.0
+        response_budget_s=6.0, evidence_gap_reset_s=0.5, clear_timeout_s=20.0
     )
     det = CPDDetector(cfg)
     breath = {"valid": False, "confidence": 0.0, "bpm": None}
@@ -46,19 +46,37 @@ def test_evidence_gap_does_not_extend_budget_after_presence():
         snap = det.update(t, _motion(0.032, 0.20), breath)
         t += 0.1
     assert snap["presence"] is True
-    anchor = det.first_evidence_t
-    assert anchor is not None
 
     for _ in range(10):
         det.update(t, _motion(0.014, 0.10), breath)
         t += 0.1
-    for _ in range(20):
+    for _ in range(30):
         snap = det.update(t, _motion(0.032, 0.20), breath)
         t += 0.1
         if snap["alarm"]:
             break
     assert snap["alarm"] is True
-    assert det.alarm_since - anchor == pytest.approx(cfg.response_budget_s, abs=1e-6)
+    # 预算到期即告警；断档只影响证据，不改变锚点。
+    assert det.alarm_since == pytest.approx(cfg.response_budget_s, abs=1e-6)
+
+
+def test_late_confirmation_alarms_in_the_same_frame():
+    """预算已过期后才确认存在，必须立即告警，而不是“确认了却没告警”。"""
+    cfg = DetectorConfig(response_budget_s=4.0, clear_timeout_s=20.0)
+    det = CPDDetector(cfg)
+    breath = {"valid": False, "confidence": 0.0, "bpm": None}
+    t = 0.0
+    while t < 6.0:
+        snap = det.update(t, _motion(0.014, 0.10), breath)
+        t += 0.1
+    assert snap["presence"] is False
+
+    for _ in range(20):
+        snap = det.update(t, _motion(0.032, 0.20), breath)
+        t += 0.1
+    assert snap["presence"] is True
+    assert snap["alarm"] is True
+    assert det.alarm_since == pytest.approx(det.presence_since, abs=1e-6)
 
 
 def test_empty_calibration_roundtrip(tmp_path, monkeypatch):

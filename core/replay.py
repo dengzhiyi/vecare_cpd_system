@@ -43,6 +43,7 @@ from .audio import (
 from .channel import AcousticChannel
 from .config import (
     AUDIO_FS,
+    BAND_CHOICES,
     CSI_FS,
     F_HIGH,
     MRC_WEIGHT_FLOOR,
@@ -111,6 +112,32 @@ def _clipped_samples(x: np.ndarray, level: float = 0.999, min_run: int = 3) -> i
     return int(runs[runs >= min_run].sum())
 
 
+def _band_mismatch_hint(x: np.ndarray, fs: int, hw_f_max: float | None) -> str:
+    """同步失败时，用其它频响档位试一次，给出可操作的提示。
+
+    18 kHz 档的录音在默认 20 kHz 档下检查，探测音的高频部分可能刚好落在
+    滤波器边缘，匹配滤波峰不足以过门；此时原始报错“没有探测音”会把人引向
+    录音流程，而真正的原因是档位不一致。只在失败路径上多试几次，代价可接受。
+    """
+    head = x[: min(x.size, 10 * fs)]
+    best = None
+    for ceiling in BAND_CHOICES:
+        if hw_f_max is not None and abs(ceiling - float(hw_f_max)) < 1e-6:
+            continue
+        try:
+            probe = make_probe(fs=fs, hw_f_max=ceiling)
+            _, sync = frame_offsets(head, probe)
+        except (ValueError, RuntimeError):
+            continue
+        ratio = float(sync["match_ratio"])
+        if best is None or ratio > best[1]:
+            best = (ceiling, ratio)
+    if best is None or best[1] < 9.0:
+        return ""
+    return (f" This recording matches the {best[0]/1000:.0f} kHz band "
+            f"(quality {best[1]:.1f}); add `--hw-f-max {best[0]:.0f}`.")
+
+
 def load_csi(
     path: str | Path,
     fs: int | None = None,
@@ -143,13 +170,14 @@ def load_csi(
     probe = probe or make_probe(fs=native_fs, hw_f_max=hw_f_max)
     starts, sync = frame_offsets(x, probe, min_ratio=min_peak_ratio)
     if starts.size < 2 or sync["match_ratio"] < 9.0:
+        hint = _band_mismatch_hint(x, native_fs, hw_f_max)
         raise RuntimeError(
             f"{Path(path).name}: no probe repetition found "
             f"(correlation peak/floor {sync['match_ratio']:.1f}, need >= 9; a "
-            f"recording that contains the Kasami probe scores around 12–18). The probe "
-            f"must be playing during the recording, at its original "
-            f"{probe.period_s*1000:.1f} ms period -- no resampling, no tempo "
-            f"change, no noise suppression. Run "
+            f"recording that contains the Kasami probe scores around 12–18)."
+            + hint + " The probe must be playing during the recording, at its "
+            f"original {probe.period_s*1000:.1f} ms period -- no resampling, no "
+            f"tempo change, no noise suppression. Run "
             f"`python replay_audio.py --emit-probe probe.wav` for the file, and "
             f"see README「实采录音接入」for the recording setup."
         )
@@ -282,7 +310,9 @@ def check_audio(
 
     meta = None
     try:
-        _, _, meta = load_csi(path, fs=fs, hw_f_max=hw_f_max, max_seconds=max_seconds)
+        amp, _, meta = load_csi(
+            path, fs=fs, hw_f_max=hw_f_max, max_seconds=max_seconds
+        )
     except RuntimeError as exc:
         checks.append(_check("帧同步", "FAIL", str(exc)))
     else:
@@ -301,9 +331,23 @@ def check_audio(
 
         nominal = int(round(used_fs / CSI_FS))
         drift = abs(int(sync["period_samples"]) - nominal)
+        std = float(sync.get("period_std_samples", 0.0))
+        strict = float(sync.get("strict_ratio", 0.0))
+        # 中位数取整永远等于标称周期，必须看间隔分布本身。真机的播放与
+        # 采集时钟不同源，实测严格 960 的占比只有 47–86%；同一台设备的
+        # 回环或仿真则 ≥99%。
+        if drift > 2:
+            period_status = "FAIL"
+        elif strict < 0.95:
+            period_status = "FAIL"
+        elif strict < 0.99:
+            period_status = "WARN"
+        else:
+            period_status = "PASS"
         checks.append(_check(
-            "周期", "PASS" if drift <= 1 else ("WARN" if drift <= 2 else "FAIL"),
-            f"{sync['period_samples']} 采样/周期 · 标称 {nominal}",
+            "周期", period_status,
+            f"{sync['period_samples']} 采样/周期 · 标称 {nominal} "
+            f"· 间隔 σ {std:.2f} 采样 · 严格占比 {strict*100:.1f}%",
         ))
 
         frames = int(meta["frames"])
@@ -325,17 +369,25 @@ def check_audio(
             f"· 覆盖 {coverage*100:.1f}% · 栅格偏差 {sync.get('max_deviation_ms', 0):.1f} ms",
         ))
 
+        # 探头裕量来自理想探测信号的频谱，只能说明频带规划合理；真正决定
+        # 能不能用的是录音里每个载波 bin 的实际功率。手机扬声器/麦克风在
+        # 18 kHz 附近滚降时，边缘载波会低 20 dB 以上，相当于只用了少数几路。
+        level = np.asarray(amp).mean(axis=0)
+        spread = 20.0 * np.log10(
+            max(float(level.min()), 1e-12) / max(float(level.max()), 1e-12)
+        )
+        meta["carrier_spread_db"] = round(float(spread), 2)
         margin = float(meta["probe_db_min"])
-        if margin >= -10.0:
-            band_status = "PASS"
-        elif margin >= -20.0:
-            band_status = "WARN"
-        else:
-            band_status = "FAIL"
+        # 只作警告，不作硬门：载波功率差同时包含硬件滚降与多径零点，二者
+        # 无法从单次录音里区分。实测仿真车厢的合法基线也会出现 -38 dB 的
+        # 多径零点；若按 -10 dB 硬拦，会把正常录音全部拒掉。真正的硬门是
+        # 帧间隔分布——多径不会改变探测音的帧栅格。
+        band_status = "PASS" if spread >= -10.0 else "WARN"
         checks.append(_check(
             "频带", band_status,
             f"{meta['carriers']} 载波 @ {meta['carrier_span_hz'][0]:.0f}–"
-            f"{meta['carrier_span_hz'][1]:.0f} Hz · 探头裕量 {margin:.1f} dB",
+            f"{meta['carrier_span_hz'][1]:.0f} Hz · 实测跨度 {spread:.1f} dB "
+            f"· 探头裕量 {margin:.1f} dB",
         ))
 
     if meta is not None:
@@ -366,12 +418,23 @@ def run_wav(
     cfg: DetectorConfig | None = None,
     hw_f_max: float | None = None,
     background: dict | None = None,
+    require_qc: bool = True,
 ) -> dict:
     """让一段录制的 WAV 走完整个检测链路。
 
     ``background`` 是空车标定基线；实采若不做标定就只能冷启动自适应，
     两者得到的 δ₀ 与相干门限不同，必须显式选择而不是隐式回退。
+
+    ``require_qc`` 为真时先过录音质检。质检 FAIL 意味着帧时间轴、载波
+    功率或格式已经不可信，此时再输出“存在/呼吸”结论只会给操作员一个
+    看似精确的错误答案，因此直接拒绝，而不是降级。
     """
+    if require_qc:
+        qc = check_audio(path, fs=fs, hw_f_max=hw_f_max)
+        if not qc["passed"]:
+            failed = [c for c in qc["checks"] if c["status"] == "FAIL"]
+            detail = "；".join(f"{c['name']}（{c['detail']}）" for c in failed)
+            raise RuntimeError(f"{Path(path).name}: 输入不可信，请重录。未通过：{detail}")
     amp, times, meta = load_csi(
         path, fs=fs, probe=probe, carriers=carriers, hw_f_max=hw_f_max
     )
@@ -441,9 +504,8 @@ def summarise(frames: list[dict], meta: dict | None = None) -> dict:
         "confirmed_by": None if presence_frame is None else presence_frame["state"].get("breath_source"),
         "alarm_at": alarm_at,
         "alarm_reason": None if alarm_frame is None else alarm_frame["state"]["alarm_reason"],
-        "response_time_s": None
-        if alarm_at is None or first_evidence is None
-        else round(alarm_at - first_evidence, 2),
+        # 预算是端到端的：从开始监测（t=0）起算，因此响应时间就是告警时刻。
+        "response_time_s": None if alarm_at is None else round(alarm_at, 2),
         "apnea_escalated_at": None if apnea_frame is None else apnea_frame["t"],
         "breathing_at": None if bpm_frame is None else bpm_frame["t"],
         "bpm_median": None if not bpms else round(float(np.median(bpms)), 1),

@@ -38,6 +38,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.config import (  # noqa: E402
+    BAND_CHOICES as CONFIG_BAND_CHOICES,
     RESPONSE_BUDGET_S,
     APNEA_TIMEOUT_S,
     BREATH_WINDOW_S,
@@ -64,7 +65,7 @@ MAX_ANALYZE_SECONDS = 3600.0
 # UI 可以提供的硬件上限。首项 24 kHz 是最高可用频响上限的实际值；20 kHz
 # 是论文实测上限，也是默认档。plan_band 会拒绝载波少于四个的上限（低于约
 # 12.75 kHz），因此 API 刻意只暴露这组经过测试的取值。
-BAND_CHOICES = (24_000, 20_000, 18_000, 16_000, 14_000)
+BAND_CHOICES = tuple(int(v) for v in CONFIG_BAND_CHOICES)
 
 
 def band_options() -> list[dict]:

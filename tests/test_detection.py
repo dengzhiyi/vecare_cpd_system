@@ -47,7 +47,6 @@ def test_motion_presence_then_alarm_within_budget():
             break
     assert snap["presence"] is True
     assert snap["alarm"] is False
-    first_evidence = det.first_evidence_t
 
     for _ in range(60):
         snap = det.update(t, MOVING, INVALID_PEAK)
@@ -57,10 +56,9 @@ def test_motion_presence_then_alarm_within_budget():
     assert snap["alarm"] is True
     assert snap["alarm_reason"] == "PRESENCE"
     assert snap["state"] == "ALARM"
-    # 预算从首个证据样本起算，因此确认延迟是计入预算的，
-    # 而不是额外叠加在上面
-    assert det.alarm_since - first_evidence == pytest.approx(
-        cfg.response_budget_s, abs=1e-6
+    # 预算从开始监测（t=0）起算；确认晚于预算到期时立即告警。
+    assert det.alarm_since == pytest.approx(
+        max(cfg.response_budget_s, det.presence_since), abs=1e-6
     )
 
 
@@ -169,9 +167,8 @@ def test_offline_sleeping_scenario_meets_response_budget():
     assert m["detected"] is True
     assert m["false_presence_frames"] == 0
     assert m["alarm_at"] is not None
-    # 论文的 10 s 要求约束的是从首个证据样本起算的预算，
-    # 而不是从确认时刻起算的预算
-    assert m["response_time_s"] is not None and m["response_time_s"] <= 10.05
+    # 预算从开始监测（t=0）起算；判决按 10 Hz 栅格对齐，最多晚一个判决帧。
+    assert m["response_time_s"] is not None and m["response_time_s"] <= 10.2
     assert m["alarm_reason"] == "PRESENCE"
     assert m["bpm_mae"] is not None and m["bpm_mae"] < 2.0
 

@@ -98,6 +98,10 @@ class CPDDetector:
         self.coherence_threshold = float(profile.get("coherence_threshold", 0.0))
         self.coherence_floor = float(profile.get("coherence_floor", 0.0))
         self.coherence_spread = float(profile.get("coherence_spread", 0.0))
+        if profile.get("motion_threshold"):
+            # 标定基线的运动门限是按当次载波数与灵敏度算的；不加载它，
+            # 标定与冷启动就会用两套阈值，同一份数据得到不同结论。
+            self.motion_threshold = float(profile["motion_threshold"])
         self.background_source = "空车标定"
         self.calibrated = True
         if t > 0:
@@ -310,10 +314,10 @@ class CPDDetector:
         )
 
         if not self.alarm and self.presence:
-            anchor = self.first_evidence_t
-            if anchor is None:
-                anchor = self.presence_since if self.presence_since is not None else t
-            self.countdown = max(0.0, self.cfg.response_budget_s - (t - anchor))
+            # 响应预算是端到端指标：从系统开始监测（t=0）起算，而不是从
+            # “本次证据片段”起算。若锚在首条证据，证据出现得越晚，告警就
+            # 越晚，WR-01 要求的 10 s 冷启动响应会被系统性地放宽。
+            self.countdown = max(0.0, self.cfg.response_budget_s - t)
             if apnea:
                 self._raise_alarm(t, "APNEA", "检测到儿童呼吸停止，触发呼吸异常告警")
             elif self.countdown <= 1e-6:

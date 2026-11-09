@@ -405,6 +405,8 @@ def frame_offsets(
         "jitter_ms": 0.0,
         "max_deviation_ms": 0.0,
         "longest_gap_s": 0.0,
+        "period_std_samples": 0.0,
+        "strict_ratio": 0.0,
     }
     if found.size < 2:
         return found, stats
@@ -420,6 +422,12 @@ def frame_offsets(
     period = max(1, period)
     stats["period_samples"] = period
     stats["csi_fs"] = probe.fs / period
+    # 只用中位数/取整会丢掉“帧间隔到底有多稳”这一信息：真实手机录音的
+    # 播放与采集时钟不同源，间隔会在 959/960/961 之间跳动，而中位数仍
+    # 恰好等于 960。质量门必须看到分布本身。
+    if near.size:
+        stats["period_std_samples"] = round(float(np.std(near)), 3)
+        stats["strict_ratio"] = round(float(np.mean(near == nominal)), 4)
 
     starts = [int(found[0])]
     last = int(found[0])

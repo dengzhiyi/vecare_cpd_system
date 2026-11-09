@@ -84,6 +84,11 @@ class AcousticBand:
         )
 
 
+# 可选的硬件频响上限（Hz）。Web/API、命令行与标定必须共用这一份清单，
+# 否则同一个录音在不同入口会得到不同的频带规划。
+BAND_CHOICES: tuple[float, ...] = (24_000.0, 20_000.0, 18_000.0, 16_000.0, 14_000.0)
+
+
 def plan_band(hw_f_max: float | None = None) -> AcousticBand:
     """根据硬件可用带宽推导载波集合。
 

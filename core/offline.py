@@ -120,10 +120,11 @@ def evaluate_frames(frames: list[dict], scenario) -> dict:
         "alarm_latency_s": None
         if alarm_at is None or enter_t is None
         else round(alarm_at - enter_t, 2),
-        # 该数值由 10 s 的 CPD 预算决定，而不是 alarm_latency_s。
+        # 预算从开始监测（t=0）起算；场景中儿童在 enter_t 时刻已在车内，
+        # 因此端到端响应就是 alarm_latency_s。
         "response_time_s": None
-        if alarm_at is None or first_evidence is None
-        else round(alarm_at - first_evidence, 2),
+        if alarm_at is None or enter_t is None
+        else round(alarm_at - enter_t, 2),
         "alarm_reason": None if alarm_frame is None else alarm_frame["state"]["alarm_reason"],
         "apnea_escalated_at": None if apnea_frame is None else apnea_frame["t"],
         "bpm_mae": None if bpm_mae is None else round(bpm_mae, 3),
