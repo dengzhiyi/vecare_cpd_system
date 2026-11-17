@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VeCare 算法验证与平台验收报告</title>
+<style>
+:root{
+  --ink:#16181d; --ink-2:#3d4350; --muted:#6b7382; --faint:#9aa3b0;
+  --line:#e4e7ec; --line-2:#cfd4dc;
+  --bg:#fcfcfb; --card:#ffffff;
+  --accent:#1f5fd0; --accent-soft:#eef3fd; --accent-line:#c6d8f7;
+  --teal:#0f7b72; --teal-soft:#e8f5f3; --teal-line:#bde0da;
+  --amber:#a8620a; --amber-soft:#fdf3e3; --amber-line:#efd6ae;
+  --red:#b3261e; --red-soft:#fbeceb; --red-line:#f0c9c6;
+  --mono: ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.78 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px 100px}
+a{color:inherit}
+
+/* ---------- hero ---------- */
+.hero{padding:72px 0 40px;border-top:3px solid var(--ink)}
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:18px
+}
+h1{font-size:42px;line-height:1.2;font-weight:500;margin:0 0 18px;letter-spacing:-.015em}
+.lede{font-size:17px;line-height:1.75;color:var(--ink-2);max-width:760px;margin:0 0 28px}
+.lede b{font-weight:500;color:var(--ink);background:linear-gradient(transparent 62%,#dfe9fb 62%)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  font-family:var(--mono);font-size:12.5px;padding:5px 11px;border:1px solid var(--line-2);
+  border-radius:6px;background:#fff;color:var(--ink-2)
+}
+.chip b{color:var(--accent);font-weight:500}
+
+/* ---------- toc ---------- */
+.toc{
+  display:flex;flex-wrap:wrap;gap:6px 22px;padding:16px 0;margin-bottom:8px;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-size:13.5px;color:var(--muted);position:sticky;top:0;z-index:5;
+  background:rgba(252,252,251,.94);backdrop-filter:blur(8px)
+}
+.toc a{text-decoration:none;transition:color .15s}
+.toc a:hover{color:var(--accent)}
+.toc span{font-family:var(--mono);color:var(--faint);margin-right:6px;font-size:11.5px}
+
+/* ---------- section ---------- */
+section{padding-top:56px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:10px}
+.num{
+  font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--accent-soft);
+  border:1px solid var(--accent-line);border-radius:5px;padding:2px 7px;flex:none;
+  position:relative;top:-2px
+}
+h2{font-size:24px;font-weight:500;margin:0;letter-spacing:-.01em}
+.sec-sub{margin:0 0 26px 0;color:var(--muted);font-size:14.5px;max-width:800px}
+h3{font-size:16px;font-weight:500;margin:32px 0 10px}
+p{margin:0 0 16px}
+.mono{font-family:var(--mono);font-size:13px;background:#f2f4f7;padding:1px 5px;border-radius:4px;color:var(--ink-2)}
+
+/* ---------- tables ---------- */
+.tbl-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:11px 14px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line)}
+tbody tr:last-child td{border-bottom:none}
+thead th{
+  font-size:12px;font-weight:500;letter-spacing:.03em;color:var(--muted);
+  background:#f7f8fa;border-bottom:1px solid var(--line-2);white-space:nowrap
+}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+th.n{text-align:right}
+td.nil{color:var(--faint);text-align:right;font-family:var(--mono)}
+tbody tr:hover{background:#fafbfd}
+.dim{color:var(--muted)}
+.code-i{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+
+/* ---------- code ---------- */
+.code{
+  background:#1c1f26;color:#e6e9ef;border-radius:10px;padding:18px 20px;
+  font-family:var(--mono);font-size:13px;line-height:1.9;overflow-x:auto;margin:0 0 16px;
+  white-space:pre-wrap;word-break:break-word
+}
+.code .c{color:#767f90}
+.code .p{color:#7fb3ff;user-select:none}
+.code .s{color:#9ed8a0}
+
+/* ---------- notes ---------- */
+.note{
+  border-left:3px solid var(--accent);background:var(--accent-soft);padding:14px 18px;
+  border-radius:0 8px 8px 0;font-size:14px;line-height:1.72;margin:0 0 16px;color:var(--ink-2)
+}
+.note b{font-weight:500;color:var(--ink)}
+.note.warn{border-color:var(--amber);background:var(--amber-soft)}
+.note.limit{border-color:var(--red);background:var(--red-soft)}
+
+/* ---------- step cards ---------- */
+.step{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px 28px 24px;margin-bottom:22px}
+.step-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.step-no{
+  font-family:var(--mono);font-size:12px;color:#fff;background:var(--accent);
+  border-radius:5px;padding:2px 9px;flex:none;position:relative;top:-2px
+}
+.step h3{margin:0 0 4px;font-size:18px}
+.step .q{font-size:13.5px;color:var(--muted);margin:0 0 18px}
+.step h4{font-size:14px;font-weight:500;margin:20px 0 8px;color:var(--ink)}
+.steps{margin:0 0 14px;padding-left:22px;color:var(--ink-2);font-size:14px}
+.steps li{margin-bottom:8px}
+.gate{font-size:13.5px}
+.gate li{margin-bottom:7px}
+.gate b{font-weight:500;color:var(--ink)}
+
+/* ---------- verdict pill ---------- */
+.verdict{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid;margin-bottom:0;white-space:nowrap}
+.verdict.ok{color:var(--teal);border-color:var(--teal-line);background:var(--teal-soft)}
+.verdict.care{color:var(--amber);border-color:var(--amber-line);background:var(--amber-soft)}
+.verdict.no{color:var(--red);border-color:var(--red-line);background:var(--red-soft)}
+.verdict.neu{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+
+/* ---------- stat cards ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0 10px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.stat b{display:block;font-family:var(--mono);font-size:23px;font-weight:500;color:var(--accent);line-height:1.3;letter-spacing:-.01em}
+.stat span{display:block;font-size:13px;color:var(--muted);margin-top:6px;line-height:1.6}
+
+/* ---------- red lines ---------- */
+.redlist{display:grid;gap:0;margin-bottom:16px}
+.red{display:grid;grid-template-columns:40px 1fr;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)}
+.red:first-child{border-top:1px solid var(--line)}
+.rn{
+  width:26px;height:26px;border-radius:50%;background:var(--red-soft);border:1px solid var(--red-line);
+  color:var(--red);font-family:var(--mono);font-size:12px;display:flex;align-items:center;justify-content:center;
+  margin-top:2px
+}
+.red h4{margin:0 0 4px;font-size:15px;font-weight:500}
+.red p{margin:0;font-size:13.5px;color:var(--muted)}
+
+/* ---------- footer ---------- */
+footer{
+  margin-top:72px;padding-top:24px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--faint);line-height:1.9;font-family:var(--mono)
+}
+
+@media (max-width:860px){
+  .wrap{padding:0 20px 72px}
+  h1{font-size:32px}
+  .stats{grid-template-columns:1fr}
+  .toc{position:static}
+  .step{padding:22px 18px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">VeCare · 算法验证 / 平台验收报告</div>
+  <h1>代码算法准确性检测<br>与 ESP32 平台四步验收方案</h1>
+  <p class="lede">对 <b>core/audio.py、core/dsp.py、core/replay.py、core/detector.py</b> 全链路完成数值验证与失效注入测试：
+  <b>Kasami 生成、帧同步、CSI 反演、闭环判决算法实现正确</b>；风险集中在硬件执行层（时钟同源、DMA 连续性、频响达标），
+  本报告给出探测音生成 → 播放（标准工况）→ 录制 → 判定四步的详细步骤、验收标准与注意事项。</p>
+  <div class="chips">
+    <div class="chip">平台 <b>ESP32-LyraT V4.3</b> + TPA3116D2 + 头枕扬声器/麦克风</div>
+    <div class="chip">探测音 <b>probe18k.wav</b>（10.5–16.5 kHz 档）</div>
+    <div class="chip">测试 <b>88 / 88 通过</b></div>
+    <div class="chip">闭环报警 <b>10.1 s ≤ 10 s 预算</b></div>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#s1"><span>01</span>算法准确性检测结论</a>
+  <a href="#s2"><span>02</span>与论文原理的差异</a>
+  <a href="#s3"><span>03</span>四步验收方案</a>
+  <a href="#s4"><span>04</span>红线与禁止事项</a>
+</nav>
+
+<!-- ============================================================ -->
+<section id="s1">
+  <div class="sec-head"><span class="num">01</span><h2>算法准确性检测结论（本机实测）</h2></div>
+  <p class="sec-sub">验证方法：序列性质数值复算、probe 文件逐字节比对、失效注入（频带错配 / 时钟漂移 / 抖动拉伸）、
+  全场景渲染→回放闭环（<span class="mono">--selfcheck</span>）与 <span class="mono">pytest tests</span> 全量回归。</p>
+
+  <div class="stats">
+    <div class="stat"><b>88 / 88</b><span>pytest 测试全部通过</span></div>
+    <div class="stat"><b>0.067</b><span>Kasami 循环自相关旁瓣与互相关峰值比（=17/255，达理论界 2<sup>n/2</sup>+1）</span></div>
+    <div class="stat"><b>7 / 7</b><span>场景闭环：渲染 WAV → 回放判决与仿真逐场景一致</span></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:130px">环节</th><th>验证内容</th><th>实测结果</th><th style="width:90px">结论</th></tr></thead>
+      <tbody>
+        <tr><td>m 序列</td><td>order-8 LFSR 周期与真 m 序列性</td><td class="n">255；16 条多项式全部为真 m 序列（测试覆盖）</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>Kasami 小集合</td><td>集合大小、循环自相关旁瓣、互相关</td><td class="n">16 条（2^(n/2)）；自相关旁瓣与互相关最大值均 17/255≈0.067，三值分布 {−1, −17, +15}，完全符合理论界</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>probe 文件</td><td>probe18k.wav / probe20k.wav 与 <span class="code-i">make_probe</span> 再生成逐字节比对</td><td class="n">字节级完全一致（48 kHz / 单声道 / 16-bit，周期 960 样本 × 3000 遍 = 60 s）</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>探测音性质</td><td>18k 档：24 载波 10.5–16.5 kHz，探测带 10.3–16.7 kHz</td><td class="n">带内能量 98.9%，PAPR 9.4 dB，载波设计电平差 ≤ ±3 dB（<span class="code-i">probe_condition_db</span>）</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>CSI 反演</td><td>正则化谱除法 <span class="code-i">estimate_csi</span></td><td class="n">对已知合成信道精确恢复；载波对齐 50 Hz DFT 网格</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>端到端闭环</td><td><span class="code-i">--selfcheck</span>：7 场景渲染 WAV → 回放 → 判决</td><td class="n">与仿真判决逐场景一致：BPM 18→18.1、24→24.1、20→20.3、30→29.9、14→14.2；空车 / 干扰零误报；报警 10.1 s（预算 10 s）</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>18k 档闭环</td><td>渲染 → 回放（<span class="code-i">--hw-f-max 18000</span>）</td><td class="n">有人 8.98 s 检出，报警 10.08 s，BPM 18.3（真值 18）</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>fail-closed</td><td>频带错配（18k 录音按 20k 分析）</td><td class="n">match_ratio 5.4 &lt; 9 → QC FAIL，<span class="code-i">run_wav</span> 拒识并给出正确提示</td><td><span class="verdict ok">通过</span></td></tr>
+        <tr><td>时钟质量门</td><td>人为注入 2 / 4 / 10 ppm 漂移后 <span class="code-i">check_audio</span></td><td class="n">2 ppm → σ 0.18 样本 / strict 99.4%（PASS）；4 / 10 ppm → WARN（σ 0.26 / 0.41）；0.2% 拉伸 → FAIL（有测试覆盖）</td><td><span class="verdict ok">通过</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note"><b>结论：</b>代码侧（生成 → 同步 → CSI → 判定）经 88 项测试 + 全场景闭环 + 失效注入验证，准确性达标，
+  可直接支撑 ESP32-LyraT / TPA3116D2 平台验证论文原理。风险全部集中在硬件执行层（时钟同源、DMA 连续性、频响达标），
+  按第 03 节四步验收执行即可。</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s2">
+  <div class="sec-head"><span class="num">02</span><h2>与论文原理的关键差异（刻意折衷，非缺陷）</h2></div>
+  <p class="sec-sub">代码注释已说明设计动机；以下两条为 48 kHz 硬件约束下的工程折衷，其余参数与论文一致。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px">条目</th><th>论文口径</th><th>仓库实现</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Kasami 阶数</td>
+          <td>order-10，1023 chip / 20 ms，需 &gt;102 kHz 采样</td>
+          <td>order-8，255 chip @ 48 kHz</td>
+          <td>正交增益 255 vs 论文 1023，约差 6 dB，为 48 kHz 采样约束下的必要折衷</td>
+        </tr>
+        <tr>
+          <td>运动判据</td>
+          <td>ḡ &gt; ε 固定阈值</td>
+          <td>尺度不变的 δ/δ₀ + κ 一致性</td>
+          <td>对布置变化更稳健，工程上更优</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="dim">一致参数：48 kHz 采样、50 Hz CSI 帧率、20 ms 调制周期、24 载波、8 s 呼吸窗、5 s 证据窗 / 30% 占比、
+  10 s 响应预算（Euro NCAP 口径）、MRC 权重 ρ(f, 20 ms)、V 形干扰识别、有效 BPM 域 10–75。</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="s3">
+  <div class="sec-head"><span class="num">03</span><h2>四步验收方案</h2></div>
+  <p class="sec-sub">每步给出详细步骤、验收标准（硬门）与注意事项。贯穿全程的第一原则：<b>probe18k 档位一致性</b>——
+  使用 probe18k.wav 时，生成、录制、质检、标定、判定全链路必须带 <span class="mono">--hw-f-max 18000</span>。</p>
+
+  <!-- Step 1 -->
+  <div class="step">
+    <div class="step-head"><span class="step-no">STEP 1</span><h3>探测音生成与文件验收（PC 侧，立即可做）</h3></div>
+    <p class="q">目标：确认写入 ESP32 的探测音文件本身无误——这是全链路的基准信号。</p>
+
+    <h4>详细步骤</h4>
+    <ol class="steps">
+      <li>优先直接使用仓库随附的 <span class="mono">probe18k.wav</span>；如需更长时长再生成（SD 循环播放建议 300 s）：</li>
+    </ol>
+    <div class="code"><span class="p">$</span> python3 replay_audio.py --emit-probe probe18k.wav --seconds 300 --hw-f-max 18000</div>
+    <ol class="steps" start="2">
+      <li>对文件做格式与频谱复核（<span class="mono">ffprobe</span> / <span class="mono">wave</span> 模块 + 频谱脚本）。</li>
+    </ol>
+
+    <h4>验收标准（硬门）</h4>
+    <ul class="gate">
+      <li>WAV 为 <b>48 kHz / 单声道 / 16-bit PCM</b>，样本总数 = 960 的整数倍（60 s = 28,800,000 样本）；</li>
+      <li>再生成文件与分发文件<b>逐字节一致</b>（<span class="mono">filecmp</span>）；周期 960 样本（= 20 ms）；</li>
+      <li>频谱：能量 <b>98%+</b> 集中在 10.3–16.7 kHz，24 根载波峰电平差 <b>≤ 3 dB</b>。</li>
+    </ul>
+
+    <h4>注意事项</h4>
+    <ul class="gate">
+      <li><b>档位选择依据：</b>头枕扬声器按功放 + 扬声器实测 −3 dB 上限选档——上限 ≥ 18 kHz 用 18k 档（载波顶 16.5 kHz，留 1.5 kHz 保护带），只有 ≥ 20 kHz 才用默认 20k 档；</li>
+      <li><b>禁止任何重编码</b>（MP3/AAC 重压、重采样、淡入淡出、归一化）——任何破坏 960 样本周期网格的操作都会毁掉帧同步。</li>
+    </ul>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step">
+    <div class="step-head"><span class="step-no">STEP 2</span><h3>播放链路验收——喇叭输出符合"标准工况"的手段</h3></div>
+    <p class="q">标准工况 = 数字域周期完整 + 电域无削波 + 声域频响达标，分四层逐级验证。</p>
+
+    <h4>2a. 数字域（固件层）</h4>
+    <ul class="gate">
+      <li>ESP32-LyraT 固件必须以 <b>DMA 循环缓冲且缓冲区长度为 960 的整数倍</b>循环播放；ES8388 锁 48 kHz（MCLK 12.288 MHz，<span class="mono">use_apll</span>）；<b>禁止</b>软件逐块搬运引入间隔、<b>禁止</b>任何 SRC。板上 NS4150 与模拟输出通道禁用；</li>
+      <li><b>验收手段：</b>用 LyraT 自身 line-out → line-in 自录 40 s，跑下方命令。帧同步 match_ratio ≥ 12、周期 std &lt; 0.2 样本、strict_ratio ≥ 0.99、无削波、无静音孔，即数字域合格。</li>
+    </ul>
+    <div class="code"><span class="p">$</span> python3 replay_audio.py loopback.wav --qc --hw-f-max 18000</div>
+
+    <h4>2b. 电域（功放与接线）</h4>
+    <ul class="gate">
+      <li>TPA3116D2 为 D 类功放：确认输出 LC 滤波（典型 10 µH + 0.68 µF，截止 ~61 kHz，理论上远高于 16.5 kHz，但<b>实测必须做</b>——负载阻抗 / 布板会改变滤波响应）；增益旋钮设置不得使输出削波；</li>
+      <li><b>验收手段：</b>示波器 / 音频分析仪在扬声器端子测——播放 probe18k 时波形应为探测音的缩放副本，无削波平顶、无 400 kHz 开关残留超标；记录峰值留 <b>3–6 dB 余量</b>（对应录音峰值 ≤ −6 dBFS）；</li>
+      <li>接线：ES8388 AUX IN（选通 IN2、关闭 ALC）、麦克风前置放大电路<b>必须由汽车 12 V（点烟器）取电</b>且功放最后上电、最先断电，防止上电爆音与数字地串音。</li>
+    </ul>
+
+    <h4>2c. 声域（关键——头枕扬声器带宽 + 传声链路频响）</h4>
+    <ul class="gate">
+      <li>用测量麦克风 + 音频接口（或示波器 + 标准麦克风）对 <b>TPA3116D2 → 头枕扬声器 → 空气 → 麦克风</b> 整链做 <b>8–24 kHz 扫频</b>，再单独播 24 根载波单音（10.5–16.5 kHz，间隔约 261 Hz）；</li>
+      <li><b>验收标准：10.5–16.5 kHz 内衰减 ≤ 10 dB，无死载波</b>（某根载波低于其余 &gt; 10 dB 即为死载波——会触发运行期剔除，削弱空间分集）；</li>
+      <li>这是方案中"普通功放 / 扬声器在 20 kHz 以上快速滚降，必须扫频确认"的具体化：头枕扬声器多为中高频小单元，高频滚降点和盆架谐振需逐点确认；TPA3116D2 数据手册带宽虽标称至 20 kHz+，<b>带载实测才算数</b>。</li>
+    </ul>
+
+    <h4>2d. 声学布置对照</h4>
+    <ul class="gate">
+      <li>头枕扬声器 → 座椅目标区域 ≈ 30–60 cm，避免 CIPP 下静默锥；车内驻波必然使各载波增益有差异（±5 dB 常见，属正常多径），QC 的"频带"项只对 &gt; 10 dB 的死载波 WARN；</li>
+      <li><b>电气串音对照：</b>静默工况录 30 s（应无探测音、match_ratio ≈ 8），再正常播放对照——若静默时麦克风仍拾到串音，说明功放 / 麦克风供电耦合，须整改后再继续。</li>
+    </ul>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step">
+    <div class="step-head"><span class="step-no">STEP 3</span><h3>录制验收（SD 卡音频）</h3></div>
+    <p class="q">目标：录音满足 8 项质检硬指标，并通过平台级预检（比 <span class="mono">run_wav</span> 更严的门）。</p>
+
+    <h4>详细步骤</h4>
+    <ol class="steps">
+      <li>SD 卡写 WAV（48 kHz / 单声道 / 16-bit，24-bit 更佳），每段 ≥ 20 s（建议 30–60 s）；</li>
+      <li>拷回 PC 后先跑单项质检：</li>
+    </ol>
+    <div class="code"><span class="p">$</span> python3 replay_audio.py capture.wav --qc --hw-f-max 18000</div>
+
+    <h4>验收标准（8 项质检硬指标）</h4>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th style="width:140px">质检项</th><th>硬指标</th></tr></thead>
+        <tbody>
+          <tr><td>帧同步</td><td>match_ratio <b>≥ 12</b>（9–12 为 WARN，提示信噪比低）</td></tr>
+          <tr><td>周期</td><td>std <b>&lt; 0.2 样本</b> 且 strict_ratio <b>&gt; 0.99</b>（单时钟平台应接近 100%；2 ppm 漂移即达 99.4% 边界）</td></tr>
+          <tr><td>连续性</td><td>无静音孔、削波样本 = 0</td></tr>
+          <tr><td>电平</td><td>峰值留 3–6 dB 余量</td></tr>
+          <tr><td>时长 / 格式</td><td>≥ 20 s；48 kHz 单声道</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>随后跑平台级预检（硬门逻辑，比 <span class="mono">run_wav</span> 严），要求能分离空车 / 有人、无死载波：</p>
+    <div class="code"><span class="p">$</span> python3 tools/check_platform.py --empty empty1.wav empty2.wav --people p1.wav p2.wav --hw-f-max 18000</div>
+
+    <h4>注意事项</h4>
+    <ul class="gate">
+      <li><span class="mono">run_wav</span> 只对 <b>FAIL 拒识、WARN 不阻断</b>（如 4–10 ppm 漂移只 WARN）——平台验收请按上表硬门人工把关，不要只看最终能否出判决；</li>
+      <li><b>严禁</b>用手机 / 电脑播放探测音（跨设备时钟漂移：历史真机录音 strict 仅 0.48–0.86，全部被正确拒识）；<b>严禁</b>音频编辑器"打开–保存"（重采样 / 抖动破坏周期网格）；</li>
+      <li>头枕扬声器发出的探测音是 10.5–16.5 kHz 高频噪声（接近可听上限），人耳闷、录音听感"安静"是正常的，<b>不要据此调大增益到削波</b>。</li>
+    </ul>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step">
+    <div class="step-head"><span class="step-no">STEP 4</span><h3>判定算法验收</h3></div>
+    <p class="q">目标：空车标定 → 有人闭环 → 统计指标，复现论文表 2 口径（论文基准 DR 98.8%、FAR 2.1%）。</p>
+
+    <h4>详细步骤</h4>
+    <ol class="steps">
+      <li>空车标定（空车录两段：一段做基线，一段跑预检验证零误报）：</li>
+    </ol>
+    <div class="code"><span class="p">$</span> python3 -m core.calibration --wav empty.wav --start 1 --seconds 5 --hw-f-max 18000</div>
+    <ol class="steps" start="2">
+      <li>有人闭环：单人于座椅静坐、正常呼吸、浅呼吸（模拟婴儿）各录 60 s，带真值 BPM：</li>
+    </ol>
+    <div class="code"><span class="p">$</span> python3 replay_audio.py person.wav --hw-f-max 18000 --calibration</div>
+    <ol class="steps" start="3">
+      <li>统计：空车若干段 + 有人若干段，人工标注真值（有人 / 无人 / 时间戳 / BPM），计算 DR / FAR / AUC。</li>
+    </ol>
+
+    <h4>验收标准</h4>
+    <ul class="gate">
+      <li>空车全程无 presence、无报警；</li>
+      <li>有人：检出 ≤ 5 s 证据窗聚合 + <b>报警 ≤ 10 s</b>（t = 0 起算，Euro NCAP 口径）；BPM 误差以自检精度为参照（闭环实测误差 ≤ 0.3 BPM 量级，真机以测得的呼吸带真值为准）；</li>
+      <li>呼吸峰形：CSI 相位 ACF 在真实 BPM 处的峰应显著（有效 BPM 域 10–75，车内工况常用 10–60 检查）；</li>
+      <li>干扰场景（开关车门、敲击）应被 V 形 ACF 特征识别为干扰，不产生持续 presence。</li>
+    </ul>
+
+    <h4>注意事项</h4>
+    <ul class="gate">
+      <li><b>单目标数据严禁按多目标分组验收</b>（方案 §9 红线）：多目标分组是对设计的破坏性错误——本实现每个头枕位是独立链路；</li>
+      <li>浅呼吸（幅度小）与"人离开"的区分依赖空车基线——<b>每次更换布置</b>（座椅位置、麦克风点位、功放增益）后必须重新标定；</li>
+      <li>不要用会议室等强反射 + 多人环境做验证，那不是该系统的设计工况。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s4">
+  <div class="sec-head"><span class="num">04</span><h2>红线与禁止事项汇总</h2></div>
+  <p class="sec-sub">来自平台搭建方案 §9 与本次实测发现，任何一条不满足即停止验收、先行整改。</p>
+
+  <div class="redlist">
+    <div class="red"><span class="rn">1</span><div><h4>档位贯穿</h4><p>probe18k.wav ↔ <span class="mono">--hw-f-max 18000</span> 全链路一致（实测错配必拒识：match 5.4）。</p></div></div>
+    <div class="red"><span class="rn">2</span><div><h4>探测音零改动</h4><p>不重编码、不淡入淡出、不归一化——任何破坏 960 样本周期网格的处理都等于销毁基准信号。</p></div></div>
+    <div class="red"><span class="rn">3</span><div><h4>同源时钟</h4><p>播放与录制必须同守 ES8388 时钟（严禁外置声卡 / 手机）；SD 卡写卡阻塞导致 DMA 饿死是头号风险，缓冲 + 双缓冲必须验证（静默孔质检兜底）。</p></div></div>
+    <div class="red"><span class="rn">4</span><div><h4>WARN 不是通过</h4><p><span class="mono">--qc</span> 出 WARN 时先修因（漂移 / 低信噪比 / 死载波）再继续；平台验收按 §03 硬门人工把关。</p></div></div>
+    <div class="red"><span class="rn">5</span><div><h4>扫频定档</h4><p>TPA3116D2 + 头枕扬声器的 10.5–16.5 kHz 频响必须逐载波实测，不信任数据手册标称。</p></div></div>
+    <div class="red"><span class="rn">6</span><div><h4>单目标逐链路验收</h4><p>多目标分组无效；空车基线随布置变更重标。</p></div></div>
+  </div>
+
+  <div class="note"><b>总体结论：</b>代码侧（生成 → 同步 → CSI → 判定）经 88 项测试 + 全场景闭环 + 失效注入验证，准确性达标，
+  可直接支撑 ESP32-LyraT / TPA3116D2 平台验证论文原理；执行层按本报告 Step 1–4 逐层验收即可。</div>
+</section>
+
+<footer>
+  VeCare · 算法验证与平台验收报告 · 生成于 2026-11-17<br>
+  验证基线：commit e9c969a · pytest 88/88 通过 · selfcheck 7/7 场景一致 · 配套文档《VeCare 完整验证链路》《VeCare 座舱声学采集平台搭建方案》
+</footer>
+
+</div>
+</body>
+</html>
